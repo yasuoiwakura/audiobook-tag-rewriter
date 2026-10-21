@@ -1,5 +1,5 @@
-# Optionale YAML-Konfiguration.
-# Aktivieren mit: CONFIG_FILE=/config/config.yml (Docker) oder --config config.yml
+# Optional YAML configuration.
+# Enable with: CONFIG_FILE=/config/config.yml (Docker) or --config config.yml
 
 # input_dir: /data/in
 # output_dir: /data/out
@@ -10,8 +10,8 @@
 # recursive: false
 # replicate_source_dir_structure: false
 # output_suffix: false
-# !!! WARNUNG: backup=true wird bei overwrite_source_file=true DRINGEND EMPFOHLEN.
-# Ohne Backup wird die Quelldatei unwiderruflich überschrieben.
+# !!! WARNING: backup=true is STRONGLY RECOMMENDED with overwrite_source_file=true.
+# Without a backup, the source file is overwritten irreversibly.
 # overwrite_source_file: false
 # overwrite_existing: false
 # output_same_dir: false
@@ -21,7 +21,7 @@
 # loop: false
 # loop_interval: 60
 
-# Ohne tag_map und tag_rules gilt das Default-Mapping:
+# Without tag_map and tag_rules, the default mapping applies:
 # album -> series, track -> series-part, title -> album
 tag_map:
   - from: album
@@ -31,7 +31,7 @@ tag_map:
   - from: title
     to: album
 
-# Zusaetzliche Wert-Ersetzungen nach dem Mapping:
+# Additional value replacements after the mapping:
 # tag_rules:
 #   - tag: album
 #     old: Old Album

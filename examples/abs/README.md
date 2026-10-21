@@ -1,30 +1,30 @@
-# Fixer + Audiobookshelf als ein Stack
+# Fixer + Audiobookshelf as One Stack
 
-Dieses Beispiel startet `m4b-tag-fixer` und Audiobookshelf (ABS) gemeinsam.
-Der Fixer liest aus `data/in` und schreibt nach `data/out`; genau `data/out` wird
-in ABS als `/audiobooks` gemountet. Der Eingangsordner bleibt read-only und wird
-von ABS nicht gesehen.
+This example starts `m4b-tag-fixer` and Audiobookshelf (ABS) together. The fixer
+reads from `data/in` and writes to `data/out`; exactly `data/out` is mounted into
+ABS as `/audiobooks`. The input folder remains read-only and is not visible to
+ABS.
 
 ```mermaid
 flowchart LR
-    ABC["AudioBookConverter<br/>oder manueller Drop"] -->|".m4b"| IN["data/in<br/>read-only"]
-    IN -->|"Loop-Scan"| FIX["m4b-tag-fixer"]
-    FIX -->|"Kopie + Tags"| OUT["data/out<br/>= ABS-Library"]
+    ABC["AudioBookConverter<br/>or manual drop"] -->|".m4b"| IN["data/in<br/>read-only"]
+    IN -->|"loop scan"| FIX["m4b-tag-fixer"]
+    FIX -->|"copy + tags"| OUT["data/out<br/>= ABS library"]
     FIX -.->|"optional"| BAK["data/backup"]
-    OUT -->|"Periodic Scan"| ABS["Audiobookshelf<br/>:13378"]
-    ABS --> APP["Web / App"]
+    OUT -->|"periodic scan"| ABS["Audiobookshelf<br/>:13378"]
+    ABS --> APP["web / app"]
 ```
 
-## 1. Voraussetzungen
+## 1. Requirements
 
-- Docker mit Docker Compose **≥ 2.24** (`env_file.required`)
-- Port `13378` frei, oder `ABS_PORT` in `.env` ändern
-- Auf Linux: UID 1000 muss in `data/out` und `data/backup` schreiben dürfen
+- Docker with Docker Compose **≥ 2.24** (`env_file.required`)
+- Port `13378` available, or change `ABS_PORT` in `.env`
+- On Linux: UID 1000 must be able to write to `data/out` and `data/backup`
 
 ## 2. Start
 
 ```bash
-# im Repository-Root
+# from the repository root
 cd examples/abs
 
 cp .env.example .env
@@ -44,13 +44,13 @@ New-Item -ItemType Directory -Force data/in, data/out, data/backup, abs/config, 
 docker compose up -d --build
 ```
 
-Lokaler Build verwenden:
+Use a local build:
 
 ```bash
 docker compose up -d --build
 ```
 
-Veröffentlichtes GHCR-Image verwenden:
+Use the published GHCR image:
 
 ```bash
 docker compose pull
@@ -64,63 +64,63 @@ docker compose logs -f m4b-tag-fixer
 docker compose logs -f audiobookshelf
 ```
 
-ABS öffnen: <http://localhost:13378>
+Open ABS: <http://localhost:13378>
 
-## 3. Audiobookshelf einrichten
+## 3. Configure Audiobookshelf
 
-1. Beim ersten Start Admin-Benutzer anlegen.
-2. Library anlegen, z. B. „Audiobooks“.
-3. Ordner: `/audiobooks`.
-4. Media-Type: Books.
-5. **„Watch for file changes“ deaktivieren.** Die ABS-Dokumentation warnt davor,
-   externe Tools gleichzeitig auf die Library schreiben zu lassen.
-6. **Periodic Scan** aktivieren, z. B. alle 15 Minuten, oder manuell scannen.
+1. Create the admin user on first start.
+2. Create a library, for example “Audiobooks”.
+3. Folder: `/audiobooks`.
+4. Media type: Books.
+5. **Disable “Watch for file changes”.** The ABS documentation warns against
+   letting external tools write to the library at the same time.
+6. Enable **periodic scans**, for example every 15 minutes, or scan manually.
 
-Der Fixer schreibt vollständige Dateien und benennt sie atomar um; ABS sieht
-dadurch keine halb geschriebenen Dateien. Ein automatischer Scan-Trigger nach
-jedem Fixer-Lauf ist nicht implementiert.
+The fixer writes complete files and renames them atomically, so ABS never sees
+partially written files. An automatic scan trigger after each fixer pass is not
+implemented.
 
-## 4. Dateien verarbeiten
+## 4. Process Files
 
-1. `.m4b`-Datei nach `data/in` legen.
-2. Fixer wartet standardmäßig bis zu 60 Sekunden (`LOOP_INTERVAL`).
-3. Ergebnis erscheint unter `data/out`.
-4. ABS scannt periodisch oder manuell.
+1. Place an `.m4b` file in `data/in`.
+2. The fixer waits up to 60 seconds by default (`LOOP_INTERVAL`).
+3. The result appears in `data/out`.
+4. ABS scans periodically or manually.
 
-Einmal-Lauf statt Loop:
+Run once instead of in a loop:
 
 ```bash
 docker compose run --rm -e LOOP=false m4b-tag-fixer
 ```
 
-## 5. Verzeichnisstruktur
+## 5. Directory Structure
 
-ABS erwartet eine Struktur mit einem Ordner pro Buch. Deshalb setzt
-`upstream.env` in diesem Beispiel:
+ABS expects a structure with one folder per book. Therefore, `upstream.env` in
+this example sets:
 
 ```dotenv
 REPLICATE_SOURCE_DIR_STRUCTURE=true
 ```
 
-Beispiel:
+Example:
 
 ```text
-data/in/Autor/Serie/Band 1/book.m4b
-  -> data/out/Autor/Serie/Band 1/book.m4b
+data/in/Author/Series/Volume 1/book.m4b
+  -> data/out/Author/Series/Volume 1/book.m4b
 ```
 
-Wenn die Eingabe flach ist, bleibt auch die Ausgabe flach. Für ABS ist eine
-Ordnerstruktur pro Buch trotzdem empfehlenswert.
+If the input is flat, the output remains flat. For ABS, a folder structure per
+book is still recommended.
 
-## 6. Konfiguration
+## 6. Configuration
 
-- `upstream.env` – committed Defaults für den Fixer
-- `override.env` – optionale App-Overrides (ignored)
-- `.env` – Compose-Interpolation: Host-Pfade, Ports, TZ, Image-Tags
+- `upstream.env` – committed fixer defaults
+- `override.env` – optional app overrides (ignored)
+- `.env` – Compose interpolation: host paths, ports, timezone, image tags
 
-Wichtige Defaults:
+Important defaults:
 
-| Variable | Wert |
+| Variable | Value |
 | --- | --- |
 | `LOOP` | `true` |
 | `LOOP_INTERVAL` | `60` |
@@ -129,73 +129,72 @@ Wichtige Defaults:
 | `OVERWRITE_EXISTING` | `false` |
 | `OVERWRITE_SOURCE_FILE` | `false` |
 
-`BACKUP=true` kostet eine vollständige Dateikopie pro Eingabedatei. Mit
-`BACKUP=false` in `override.env` lässt sich das abschalten.
+`BACKUP=true` costs one full file copy per input file. Set `BACKUP=false` in
+`override.env` to disable it.
 
-Alle Optionen: [`../../doc/CONFIGURATION.md`](../../doc/CONFIGURATION.md).
+All options: [`../../doc/CONFIGURATION.md`](../../doc/CONFIGURATION.md).
 
-## 7. Linux-Permissions
+## 7. Linux Permissions
 
-Der Fixer-Container läuft als UID 1000. Auf Linux:
+The fixer container runs as UID 1000. On Linux:
 
 ```bash
 mkdir -p data/in data/out data/backup abs/config abs/metadata config
 sudo chown -R 1000:1000 data/out data/backup
 ```
 
-Wenn ABS mit `user: "1000:1000"` läuft, müssen auch `abs/config`,
-`abs/metadata` und `data/out` für UID 1000 schreibbar sein.
+If ABS runs with `user: "1000:1000"`, then `abs/config`, `abs/metadata`, and
+`data/out` must also be writable by UID 1000.
 
-## 8. Warum nicht direkt in die ABS-Library schreiben?
+## 8. Why Not Write Directly into the ABS Library?
 
-`OVERWRITE_SOURCE_FILE=true` könnte die Library direkt bearbeiten. Für diesen
-Stack ist das nicht der Standard:
+`OVERWRITE_SOURCE_FILE=true` could modify the library directly. For this stack,
+that is not the default:
 
-- kein Idempotenz-Marker außer der Datei selbst
-- im Loop würde jede Datei bei jedem Durchlauf neu geschrieben
-- ABS könnte während des Schreibens scannen
-- Quelle und Bibliothek wären nicht getrennt
-- ein Fehler würde die Bibliothek direkt treffen
+- no idempotency marker other than the file itself
+- in loop mode, every file would be rewritten on every pass
+- ABS could scan while the file is being written
+- source and library would not be separated
+- an error would affect the library directly
 
-Der Separate-Output-Modus mit `OVERWRITE_EXISTING=false` verhindert
-Wiederholungsarbeit und hält die Quelle unverändert.
+Separate-output mode with `OVERWRITE_EXISTING=false` prevents repeated work and
+keeps the source unchanged.
 
 ## 9. Troubleshooting
 
-### ABS zeigt falsche Tags
+### ABS Shows Incorrect Tags
 
-- Library-Ordner prüfen: `/audiobooks`, nicht `/data/in`.
-- Library erneut scannen.
-- Datei mit ffprobe prüfen:
+- Verify the library folder: `/audiobooks`, not `/data/in`.
+- Scan the library again.
+- Check the file with ffprobe:
   ```bash
   ffprobe -v quiet -show_entries format_tags -of json -- "book.m4b"
   ```
-- `show` und `episode_id` sollten gesetzt sein.
+- `show` and `episode_id` should be set.
 
-### Keine Datei in `data/out`
+### No File in `data/out`
 
-- Logs prüfen: `docker compose logs -f m4b-tag-fixer`.
-- `FILENAME_FILTER` und `.m4b`-Endung prüfen.
-- Bei Unterordnern: `REPLICATE_SOURCE_DIR_STRUCTURE=true` (hier Default).
-- Bei bereits vorhandener Ausgabe: `OVERWRITE_EXISTING=true` oder Datei
-  entfernen.
+- Check the logs: `docker compose logs -f m4b-tag-fixer`.
+- Check `FILENAME_FILTER` and the `.m4b` extension.
+- For subfolders: `REPLICATE_SOURCE_DIR_STRUCTURE=true` (the default here).
+- If output already exists: set `OVERWRITE_EXISTING=true` or remove the file.
 
-### Permission denied
+### Permission Denied
 
-- `data/out` und `data/backup` für UID 1000 schreibbar machen.
-- Same-Dir/In-Place benötigt ein beschreibbares `data/in`; hier ist es
+- Make `data/out` and `data/backup` writable by UID 1000.
+- Same-directory/in-place mode requires a writable `data/in`; here it is
   read-only.
 
-### ABS erkennt neue Bücher nicht
+### ABS Does Not Discover New Books
 
-- Periodic Scan aktivieren oder manuell scannen.
-- File Watcher nur mit der ABS-Warnung zu externen Tools verwenden.
+- Enable periodic scans or scan manually.
+- Use the file watcher only if you accept the ABS warning about external tools.
 
-## 10. Stoppen und Aufräumen
+## 10. Stop and Clean Up
 
 ```bash
 docker compose down
 ```
 
-Die Daten bleiben in `data/` und `abs/` erhalten. Zum vollständigen Entfernen
-diese Verzeichnisse bewusst löschen.
+Data remains in `data/` and `abs/`. To remove everything, delete those directories
+deliberately.

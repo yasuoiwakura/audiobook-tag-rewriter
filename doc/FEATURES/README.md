@@ -1,23 +1,23 @@
-# Feature-Inventar
+# Feature Inventory
 
-Übersicht aller geplanten, in Umsetzung befindlichen und umgesetzten Features.
-Jedes Feature besitzt ein eigenes Dokument in diesem Verzeichnis.
+Overview of planned, in-progress, and implemented features. Each feature has its
+own document in this directory.
 
-## Konventionen
+## Conventions
 
-- Branch: `matt-nnnn`, fortlaufend, z. B. `matt-0004`
-- Feature-Datei: `feat-nnnn-kebab-case-titel.md`; `nnnn` entspricht der Branch-Nummer
-  (z. B. `feat-0004-replicate-source-dir-structure.md`)
-- Titel im Dokument: `# feat-nnnn – Titel`
-- Statuswerte: `geplant`, `in Umsetzung`, `umgesetzt`, `verworfen`
-- Jedes Dokument enthält: Ziel, Konfiguration, Verhalten, Akzeptanzkriterien,
-  Tests, Dokumentation
-- Implementierte Features werden zusätzlich in `SPEC.md`, `README.md` sowie
-  `doc/CONFIGURATION.md` und `doc/OPERATIONS.md` geführt
+- Branch: `matt-nnnn`, sequential, for example `matt-0004`
+- Feature file: `feat-nnnn-kebab-case-title.md`; `nnnn` matches the branch number
+  (for example `feat-0004-replicate-source-dir-structure.md`)
+- Document title: `# feat-nnnn – Title`
+- Status values: `planned`, `in progress`, `implemented`, `discarded`
+- Each document contains: goal, configuration, behavior, acceptance criteria,
+  tests, documentation
+- Implemented features are also listed in `SPEC.md`, `README.md`,
+  `doc/CONFIGURATION.md`, and `doc/OPERATIONS.md`
 
-## Inventar
+## Inventory
 
-| Feature | Branch | Status | Konfiguration | Kurzbeschreibung |
+| Feature | Branch | Status | Configuration | Summary |
 | --- | --- | --- | --- | --- |
-| [feat-0004](feat-0004-replicate-source-dir-structure.md) | `matt-0004` | umgesetzt | `REPLICATE_SOURCE_DIR_STRUCTURE` (Env, YAML, CLI) | Dateien rekursiv finden und im Zielverzeichnis in der entsprechenden Unterverzeichnisstruktur ablegen; Default `false` |
-| [feat-0005](feat-0005-output-suffix-and-overwrite-source.md) | `matt-0005` | umgesetzt | `OUTPUT_SUFFIX`, `OVERWRITE_SOURCE_FILE` (Env, YAML, CLI) | Suffix explizit anwenden bzw. nur als Overwrite-Schutz; Quelle optional in-place überschreiben (`BACKUP=true` dringend empfohlen); Defaults `false` |
+| [feat-0004](feat-0004-replicate-source-dir-structure.md) | `matt-0004` | implemented | `REPLICATE_SOURCE_DIR_STRUCTURE` (env, YAML, CLI) | Find files recursively and place them in the matching subdirectory under the output directory; default `false` |
+| [feat-0005](feat-0005-output-suffix-and-overwrite-source.md) | `matt-0005` | implemented | `OUTPUT_SUFFIX`, `OVERWRITE_SOURCE_FILE` (env, YAML, CLI) | Apply the suffix explicitly or only as overwrite protection; optionally overwrite the source in place (`BACKUP=true` strongly recommended); defaults `false` |
