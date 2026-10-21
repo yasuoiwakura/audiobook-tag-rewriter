@@ -1,12 +1,12 @@
-# Beitragen
+# Contributing
 
-## 1. Voraussetzungen
+## 1. Requirements
 
 - Python 3.12+
-- Docker mit Docker Compose ≥ 2.24 (nur für Container-Tests)
+- Docker with Docker Compose ≥ 2.24 (for container tests only)
 - Git
 
-## 2. Entwicklungsumgebung
+## 2. Development Environment
 
 ```bash
 python -m venv .venv
@@ -18,17 +18,17 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 ```
 
-## 3. Tests und Linting
+## 3. Tests and Linting
 
 ```bash
 pytest
 ruff check src tests
 ```
 
-Die Tests erzeugen kleine synthetische MP4/M4B-Dateien mit echten
-mutagen-MP4-Tags. Es werden keine realen Hörbücher benötigt.
+The tests create small synthetic MP4/M4B files with real mutagen MP4 tags. No real
+audiobooks are required.
 
-Vor einem Pull Request:
+Before a pull request:
 
 ```bash
 pytest
@@ -37,58 +37,60 @@ docker compose config
 docker compose -f examples/abs/compose.yml config
 ```
 
-## 4. Projektstruktur
+## 4. Project Structure
 
 ```text
 src/m4b_tag_fixer/
-├── config.py       # Env/YAML/CLI, Validierung, Default-Mapping
-├── metadata.py     # MP4-Atome, Mapping, Regeln
-├── processor.py    # Dateisuche, Backup, Kopie, atomarer Rename
-└── main.py         # CLI, Logging, Loop, Exit-Codes
+├── config.py       # environment/YAML/CLI, validation, default mapping
+├── metadata.py     # MP4 atoms, mappings, rules
+├── processor.py    # file discovery, backup, copy, atomic rename
+└── main.py         # CLI, logging, loop, exit codes
 ```
 
-- Neue Konfigurationsoptionen müssen in `config.py`, YAML-Keys, CLI,
+- New configuration options must be added to `config.py`, YAML keys, the CLI,
   `.env.example`, `override.env.example`, `upstream.env`,
-  `config.example.yml`, `doc/CONFIGURATION.md` und `SPEC.md` ergänzt werden.
-- Neue Metadatenfelder gehören in `metadata.py` und die Tag-Tabelle in
+  `config.example.yml`, `doc/CONFIGURATION.md`, and `SPEC.md`.
+- New metadata fields belong in `metadata.py` and in the tag table in
   `doc/CONFIGURATION.md`.
-- Verhaltensänderungen brauchen Tests in `tests/`.
+- Behavioral changes require tests in `tests/`.
 
-## 5. Features und Dokumentation
+## 5. Features and Documentation
 
-Die Feature-Konventionen stehen in [`doc/FEATURES/README.md`](doc/FEATURES/README.md):
+Feature conventions are documented in
+[`doc/FEATURES/README.md`](doc/FEATURES/README.md):
 
-- Branch: `matt-nnnn`
-- Datei: `feat-nnnn-kebab-case-titel.md`
-- Status: `geplant`, `in Umsetzung`, `umgesetzt`, `verworfen`
-- Jedes Feature dokumentiert Ziel, Konfiguration, Verhalten,
-  Akzeptanzkriterien, Tests und Doku.
+- branch: `matt-nnnn`
+- file: `feat-nnnn-kebab-case-title.md`
+- status: `planned`, `in progress`, `implemented`, `discarded`
+- each feature documents goal, configuration, behavior, acceptance criteria,
+  tests, and documentation
 
-Dokumentationsstruktur:
+Documentation structure:
 
-| Datei | Inhalt |
+| File | Content |
 | --- | --- |
-| `README.md` | Einstieg, Problem, Quick Start, Stack |
-| `doc/PROBLEM.md` | Problem, Ursache, Entscheidung, Alternativen |
-| `doc/ARCHITECTURE.md` | Komponenten, Ablauf, Idempotenz |
-| `doc/CONFIGURATION.md` | alle Optionen |
-| `doc/OPERATIONS.md` | Docker, Backup, Troubleshooting |
-| `SPEC.md` | Implementierungsstand und Abnahmekriterien |
-| `doc/FEATURES/` | Feature-Inventar |
+| `README.md` | Overview, problem, quick start, stack |
+| `doc/PROBLEM.md` | Problem, root cause, decision, alternatives |
+| `doc/ARCHITECTURE.md` | Components, flow, idempotency |
+| `doc/CONFIGURATION.md` | All options |
+| `doc/OPERATIONS.md` | Docker, backup, troubleshooting |
+| `SPEC.md` | Implementation status and acceptance criteria |
+| `doc/FEATURES/` | Feature inventory |
+| `doc/archive/README.de.md` | Frozen German README snapshot |
 
-## 6. Pull-Request-Checkliste
+## 6. Pull-Request Checklist
 
-- [ ] `pytest` erfolgreich
-- [ ] `ruff check src tests` erfolgreich
-- [ ] Compose-Dateien validieren
-- [ ] Neue/geänderte Optionen in allen Konfigurationswegen dokumentiert
-- [ ] `README.md` und relevante `doc/`-Dateien aktualisiert
-- [ ] `SPEC.md` bei Verhaltensänderungen aktualisiert
-- [ ] Keine `.env`, Backups, Hörbücher oder Zugangsdaten committet
+- [ ] `pytest` passes
+- [ ] `ruff check src tests` passes
+- [ ] Compose files validate
+- [ ] New/changed options are documented in all configuration paths
+- [ ] `README.md` and relevant `doc/` files are updated
+- [ ] `SPEC.md` is updated for behavioral changes
+- [ ] No `.env`, backups, audiobooks, or credentials are committed
 
-## 7. Sicherheit
+## 7. Security
 
-- Keine Secrets, Tokens oder Zugangsdaten committen.
-- `.env` und `override.env` bleiben lokal.
-- Backups enthalten vollständige Hörbücher und gehören nicht ins Repository.
-- Der Fixer benötigt keinen Netzwerkzugriff.
+- Do not commit secrets, tokens, or credentials.
+- Keep `.env` and `override.env` local.
+- Backups contain complete audiobooks and do not belong in the repository.
+- The fixer does not require network access.

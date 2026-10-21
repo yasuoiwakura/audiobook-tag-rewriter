@@ -1,55 +1,55 @@
-# Architektur
+# Architecture
 
-## 1. Überblick
+## 1. Overview
 
-`m4b-tag-fixer` ist ein Batch-Prozessor für `.m4b`-Dateien. Er liest MP4-Tags,
-berechnet Mappings und Wert-Ersetzungen im Speicher und schreibt das Ergebnis in
-eine Kopie. Die Audiodaten werden nicht neu codiert.
+`m4b-tag-fixer` is a batch processor for `.m4b` files. It reads MP4 tags,
+computes mappings and value replacements in memory, and writes the result to a
+copy. Audio data is never re-encoded.
 
-Das Tool ist bewusst klein gehalten:
+The tool is intentionally small:
 
-- keine Datenbank
-- kein Daemon-Framework
-- kein HTTP-Server
-- kein ABS-API-Zugriff
-- kein Eingriff in die ABS-Datenbank
+- no database
+- no daemon framework
+- no HTTP server
+- no ABS API access
+- no changes to the ABS database
 
-## 2. Komponenten
+## 2. Components
 
-| Modul | Aufgabe |
+| Module | Responsibility |
 | --- | --- |
-| `src/m4b_tag_fixer/config.py` | Defaults, Env/YAML/CLI, Validierung, Default-Mapping |
-| `src/m4b_tag_fixer/metadata.py` | MP4-Atome lesen/schreiben, Tag-Normalisierung, Mapping, Regeln |
-| `src/m4b_tag_fixer/processor.py` | Dateisuche, Zielpfade, Backup, Kopie, atomarer Rename |
-| `src/m4b_tag_fixer/main.py` | CLI, Logging, Loop-Modus, Exit-Codes |
-| `src/main.py` | direkter Einstieg über `python src/main.py` |
+| `src/m4b_tag_fixer/config.py` | Defaults, environment/YAML/CLI, validation, default mapping |
+| `src/m4b_tag_fixer/metadata.py` | Read/write MP4 atoms, tag normalization, mappings, rules |
+| `src/m4b_tag_fixer/processor.py` | File discovery, target paths, backup, copy, atomic rename |
+| `src/m4b_tag_fixer/main.py` | CLI, logging, loop mode, exit codes |
+| `src/main.py` | direct entry point via `python src/main.py` |
 
-## 3. Systemfluss
+## 3. System Flow
 
 ```mermaid
 flowchart LR
-    subgraph STACK["Docker-Stack (examples/abs)"]
+    subgraph STACK["Docker stack (examples/abs)"]
         IN["/data/in<br/>read-only"]
-        FIX["m4b-tag-fixer<br/>Loop + Mapping"]
-        OUT["/data/out<br/>= ABS-Library"]
+        FIX["m4b-tag-fixer<br/>loop + mapping"]
+        OUT["/data/out<br/>= ABS library"]
         BAK["/data/backup"]
         ABS["Audiobookshelf<br/>:13378"]
         CFG["/config + /metadata"]
     end
 
-    ABC["AudioBookConverter<br/>oder manueller Drop"] -->|".m4b"| IN
-    IN -->|"Scan alle 60 s"| FIX
-    FIX -->|"Kopie + Tags<br/>atomarer Rename"| OUT
+    ABC["AudioBookConverter<br/>or manual drop"] -->|".m4b"| IN
+    IN -->|"scan every 60 s"| FIX
+    FIX -->|"copy + tags<br/>atomic rename"| OUT
     FIX -.->|"optional"| BAK
-    OUT -->|"Periodic Scan"| ABS
+    OUT -->|"periodic scan"| ABS
     CFG --- ABS
-    ABS -->|"Titel, Serie, Nr."| CLIENT["Web / App"]
+    ABS -->|"title, series, no."| CLIENT["web / app"]
 ```
 
-Der Ausgabeordner ist im ABS-Stack bewusst identisch mit der ABS-Library. Der
-Eingangsordner bleibt read-only und wird von ABS nicht gesehen.
+In the ABS stack, the output folder is intentionally the same as the ABS library.
+The input folder remains read-only and is never seen by ABS.
 
-## 4. Ablauf pro Datei
+## 4. Per-File Flow
 
 ```mermaid
 sequenceDiagram
@@ -57,78 +57,77 @@ sequenceDiagram
     participant ABC as AudioBookConverter
     participant IN as /data/in
     participant FIX as m4b-tag-fixer
-    participant OUT as /data/out (ABS-Library)
+    participant OUT as /data/out (ABS library)
     participant ABS as Audiobookshelf
 
     ABC->>IN: book.m4b
-    loop Loop-Intervall
-        FIX->>IN: *.m4b suchen
-        FIX->>FIX: Tags lesen, Mapping + Regeln
-        FIX->>OUT: Temp-Kopie schreiben + Tags setzen
-        FIX->>OUT: atomar auf Zielnamen umbenennen
+    loop loop interval
+        FIX->>IN: find *.m4b
+        FIX->>FIX: read tags, mapping + rules
+        FIX->>OUT: write temp copy + set tags
+        FIX->>OUT: atomically rename to target
     end
-    ABS->>OUT: Periodic Scan
-    ABS->>ABS: Titel / Serie / Seriennummer importieren
+    ABS->>OUT: periodic scan
+    ABS->>ABS: import title / series / series sequence
 ```
 
-Konkret:
+Concretely:
 
-1. Dateien unter `INPUT_DIR` suchen (`*.m4b`, optional rekursiv).
-2. Zielpfad bestimmen (flach, gespiegelt, Same-Dir oder In-Place).
-3. Vorhandene Ausgabedatei prüfen und ggf. überspringen.
-4. Optional die Quelle nach `BACKUP_DIR` sichern.
-5. Tags der Quelle lesen.
-6. Mappings und Wert-Ersetzungen im Speicher anwenden.
-7. Quelle in eine Temp-Datei im Zielverzeichnis kopieren.
-8. Tags in der Temp-Datei schreiben.
-9. Temp-Datei atomar auf den Zielnamen verschieben.
-10. Optional alte Backups gemäß `BACKUP_RETENTION_DAYS` bereinigen.
+1. Find files under `INPUT_DIR` (`*.m4b`, optionally recursive).
+2. Determine the target path (flat, mirrored, same-directory, or in-place).
+3. Check for an existing output file and skip it if configured.
+4. Optionally back up the source to `BACKUP_DIR`.
+5. Read the source tags.
+6. Apply mappings and value replacements in memory.
+7. Copy the source to a temp file in the target directory.
+8. Write tags to the temp file.
+9. Atomically rename the temp file to the target name.
+10. Optionally clean up old backups according to `BACKUP_RETENTION_DAYS`.
 
-## 5. MP4-Atome
+## 5. MP4 Atoms
 
-`.m4b` ist ein MPEG-4-Container. Die Metadaten liegen in MP4-Atomen, nicht in
-ID3-Frames. Deshalb verwendet das Tool `mutagen.mp4.MP4`.
+`.m4b` is an MPEG-4 container. Metadata is stored in MP4 atoms, not ID3 frames.
+The tool therefore uses `mutagen.mp4.MP4`.
 
-| Logisch | MP4-Atome | ffprobe ohne `-export_all` | ABS |
+| Logical | MP4 atoms | ffprobe without `-export_all` | ABS |
 | --- | --- | --- | --- |
 | `series` | `tvsh`, `mvnm` | `show` | Series |
 | `series-part` | `tven`, `mvin` | `episode_id` | Series Sequence |
-| `album` | `©alb` | `album` | Buchtitel |
-| `title` | `©nam` | `title` | Titel |
-| `artist` | `©ART` | `artist` | Autor |
-| `composer` | `©wrt` | `composer` | Sprecher (typisch) |
+| `album` | `©alb` | `album` | Book title |
+| `title` | `©nam` | `title` | Title |
+| `artist` | `©ART` | `artist` | Author |
+| `composer` | `©wrt` | `composer` | Narrator (typical) |
 
-Beim Lesen haben `tvsh`/`tven` Vorrang vor `mvnm`/`mvin`. Dadurch bleiben ältere
-Ausgabedateien kompatibel. `mvin` wird als echtes Integer-Atom geschrieben,
-`tven` als Text.
+When reading, `tvsh`/`tven` take precedence over `mvnm`/`mvin`. This keeps older
+output files compatible. `mvin` is written as a real integer atom, while `tven`
+is written as text.
 
-## 6. Idempotenz und Sicherheit
+## 6. Idempotency and Safety
 
-- **Standardmodus:** Die Quelle wird nie verändert; geschrieben wird eine Kopie.
-- **Vorhandene Ausgabe:** Bei `OVERWRITE_EXISTING=false` wird die Datei
-  übersprungen. Das ist der wichtigste Idempotenz-Schutz im Loop.
-- **Suffix:** `OUTPUT_SUFFIX=true` hängt `RENAME_SUFFIX` an und verhindert
-  Kollisionen; `SKIP_SUFFIX=true` überspringt bereits suffixed Dateien.
-- **Atomarer Rename:** Geschrieben wird zunächst in eine Temp-Datei im
-  Zielverzeichnis; erst nach Erfolg wird sie auf den Zielnamen verschoben.
-- **Backup:** Optional; schützt vor Datenverlust, kostet aber eine vollständige
-  Dateikopie.
-- **In-Place:** Nur mit `OVERWRITE_SOURCE_FILE=true`. Ein Backup ist dringend
-  empfohlen, aber nicht Pflicht. Im Loop wird die Datei bei jedem Durchlauf
-  erneut verarbeitet.
+- **Default mode:** The source is never modified; a copy is written.
+- **Existing output:** With `OVERWRITE_EXISTING=false`, the file is skipped. This
+  is the main idempotency guard in loop mode.
+- **Suffix:** `OUTPUT_SUFFIX=true` appends `RENAME_SUFFIX` and avoids collisions;
+  `SKIP_SUFFIX=true` skips files that already carry the suffix.
+- **Atomic rename:** Data is first written to a temp file in the target directory
+  and only moved to the target name after success.
+- **Backup:** Optional; protects against data loss but requires a full file copy.
+- **In-place:** Only with `OVERWRITE_SOURCE_FILE=true`. A backup is strongly
+  recommended but not mandatory. In loop mode, the file is processed again on
+  every pass.
 
-## 7. Grenzen
+## 7. Limits
 
-- Jede verarbeitete Datei wird vollständig kopiert.
-- Bei `moov` vor `mdat` kann eine Tag-Vergrößerung den `mdat`-Block verschieben.
-- Kein Move-Modus: Quelldateien werden nicht gelöscht oder verschoben.
-- Kein Reflink/CoW-Support.
-- Kein automatischer ABS-Scan; ABS muss periodisch oder manuell scannen.
-- Kein echter ABS-Integrationstest in der Testsuite.
+- Every processed file is copied in full.
+- If `moov` precedes `mdat`, growing a tag can shift the `mdat` block.
+- No move mode: source files are neither deleted nor moved.
+- No reflink/CoW support.
+- No automatic ABS scan; ABS must scan periodically or manually.
+- No real ABS integration test in the test suite.
 
-## 8. Weiterführend
+## 8. Further Reading
 
-- [`PROBLEM.md`](PROBLEM.md) – warum das Tag-Rewriting nötig ist
-- [`CONFIGURATION.md`](CONFIGURATION.md) – alle Optionen
-- [`OPERATIONS.md`](OPERATIONS.md) – Docker, Backup, Troubleshooting
-- [`../SPEC.md`](../SPEC.md) – Abnahmekriterien
+- [`PROBLEM.md`](PROBLEM.md) – why tag rewriting is necessary
+- [`CONFIGURATION.md`](CONFIGURATION.md) – all options
+- [`OPERATIONS.md`](OPERATIONS.md) – Docker, backup, troubleshooting
+- [`../SPEC.md`](../SPEC.md) – acceptance criteria

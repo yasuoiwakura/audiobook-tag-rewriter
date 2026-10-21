@@ -1,12 +1,12 @@
-# Betrieb
+# Operations
 
-## 1. Voraussetzungen
+## 1. Requirements
 
-- Docker mit Docker Compose **≥ 2.24** (wegen `env_file.required`)
-- Optional für lokale Entwicklung: Python 3.12+ und `pip`
-- Für den ABS-Stack: Audiobookshelf-Image `ghcr.io/advplyr/audiobookshelf`
+- Docker with Docker Compose **≥ 2.24** (for `env_file.required`)
+- Optional for local development: Python 3.12+ and `pip`
+- For the ABS stack: the Audiobookshelf image `ghcr.io/advplyr/audiobookshelf`
 
-## 2. Root-Compose: nur der Fixer
+## 2. Root Compose: Fixer Only
 
 ```bash
 mkdir -p m4b_from_AudioBookConverter m4b_for_AudioBookShelf m4b_backup config
@@ -20,30 +20,30 @@ New-Item -ItemType Directory -Force m4b_from_AudioBookConverter, m4b_for_AudioBo
 docker compose up --build
 ```
 
-Das Root-`compose.yml` startet den Fixer im Loop-Modus. Der Eingang ist
-read-only, der Ausgang und das Backup sind read-write.
+The root `compose.yml` starts the fixer in loop mode. The input is read-only;
+output and backup are read-write.
 
-| Host (Default / Env) | Container | Zugriff | Bedeutung |
+| Host (default / env) | Container | Access | Meaning |
 | --- | --- | --- | --- |
-| `./m4b_from_AudioBookConverter` / `HOST_INPUT_DIR` | `/data/in` | read-only | Eingang |
-| `./m4b_for_AudioBookShelf` / `HOST_OUTPUT_DIR` | `/data/out` | read-write | Ausgang / ABS-Library |
+| `./m4b_from_AudioBookConverter` / `HOST_INPUT_DIR` | `/data/in` | read-only | Input |
+| `./m4b_for_AudioBookShelf` / `HOST_OUTPUT_DIR` | `/data/out` | read-write | Output / ABS library |
 | `./m4b_backup` / `HOST_BACKUP_DIR` | `/data/backup` | read-write | Backup |
-| `./config` / `HOST_CONFIG_DIR` | `/config` | read-only | optionale YAML |
+| `./config` / `HOST_CONFIG_DIR` | `/config` | read-only | Optional YAML |
 
-Relative Host-Pfade beziehen sich auf das Verzeichnis der Compose-Datei.
+Relative host paths are relative to the Compose file directory.
 
-### Prebuilt-Image statt lokaler Build
+### Use a Prebuilt Image Instead of a Local Build
 
 ```bash
 docker compose pull
 docker compose up --no-build
 ```
 
-`compose.yml` enthält bewusst `build: .` und `image:`. `--build` baut lokal,
-`pull` verwendet das veröffentlichte GHCR-Image. `IMAGE_TAG` ist standardmäßig
+`compose.yml` intentionally contains both `build: .` and `image:`. `--build`
+builds locally; `pull` uses the published GHCR image. `IMAGE_TAG` defaults to
 `latest`.
 
-### Einmal-Lauf statt Loop
+### Run Once Instead of in a Loop
 
 ```bash
 LOOP=false docker compose up --build
@@ -55,53 +55,54 @@ PowerShell:
 $env:LOOP='false'; docker compose up --build
 ```
 
-Nur ein Durchlauf mit Exit-Code für Skripte:
+Run a single pass with an exit code for scripts:
 
 ```bash
 docker compose run --rm -e LOOP=false m4b-tag-fixer
 ```
 
-## 3. Loop-Modus
+## 3. Loop Mode
 
-- `LOOP=true`: Der Prozess bleibt aktiv und scannt alle `LOOP_INTERVAL` Sekunden.
-- Leere Runden und reine Skip-Runden werden nur auf `DEBUG` geloggt.
-- `INFO` zeigt nach dem Start nur echte Verarbeitung.
-- `SIGINT`/`SIGTERM` beenden den Loop sauber mit Exit-Code 0.
-- `restart: on-failure` startet den Container nach einem echten Fehler neu.
+- `LOOP=true`: The process stays active and scans every `LOOP_INTERVAL` seconds.
+- Empty passes and skip-only passes are logged only at `DEBUG`.
+- `INFO` shows only actual processing after startup.
+- `SIGINT`/`SIGTERM` stop the loop cleanly with exit code 0.
+- `restart: on-failure` restarts the container after a real failure.
 
 ## 4. Backup
 
-- `BACKUP=true` kopiert die Eingabedatei vor der Verarbeitung nach `BACKUP_DIR`.
-- Relative Pfade bleiben erhalten.
-- Ein bereits identisches Backup wird nicht erneut kopiert.
-- Schlägt das Backup fehl, wird die Datei nicht verarbeitet.
-- Das Backup ist eine vollständige Dateikopie und kostet Zeit und Speicher.
-- Alte Backups werden beim Start eines Durchlaufs gemäß
-  `BACKUP_RETENTION_DAYS` gelöscht; im Loop höchstens einmal pro Stunde.
-- `0` deaktiviert die Bereinigung.
-- `BACKUP=true` erfordert `BACKUP_DIR`; sonst Exit-Code 2.
+- `BACKUP=true` copies the input file to `BACKUP_DIR` before processing.
+- Relative paths are preserved.
+- An identical existing backup is not copied again.
+- If the backup fails, the file is not processed.
+- A backup is a full file copy and costs time and storage.
+- Old backups are deleted at the start of a pass according to
+  `BACKUP_RETENTION_DAYS`; in loop mode at most once per hour.
+- `0` disables cleanup.
+- `BACKUP=true` requires `BACKUP_DIR`; otherwise exit code 2.
 
-Im Root-Compose ist `BACKUP=true` in `upstream.env` gesetzt. `BACKUP=false` in
-`override.env` oder `.env` schaltet es ab.
+The root Compose setup sets `BACKUP=true` in `upstream.env`. `BACKUP=false` in
+`override.env` or `.env` disables it.
 
-## 5. Dateien, Überschreiben, Fehler
+## 5. Files, Overwriting, and Errors
 
-- Quelldateien werden nur mit `OVERWRITE_SOURCE_FILE=true` verändert.
-- In-Place ohne Backup ist erlaubt, wird aber beim Start und pro Datei gewarnt.
-- Vorhandene Zieldateien werden bei `OVERWRITE_EXISTING=false` übersprungen.
-- Bei `OVERWRITE_EXISTING=true` wird die alte Ausgabedatei erst nach erfolgreichem
-  Schreiben ersetzt.
-- Geschrieben wird in eine Temp-Datei im Zielverzeichnis und danach atomar
-  umbenannt.
-- Fehler einzelner Dateien stoppen den Batch nicht.
-- Beschädigte oder nicht lesbare Dateien werden als Dateifehler protokolliert.
-- Ohne passende Regeln wird die Datei unverändert kopiert.
-- Keine passenden Dateien: Warnung, Exit-Code 0.
-- Ausgabeverzeichnisse werden bei Bedarf angelegt.
+- Source files are only modified with `OVERWRITE_SOURCE_FILE=true`.
+- In-place mode without a backup is allowed but logs a warning at startup and per
+  file.
+- Existing target files are skipped when `OVERWRITE_EXISTING=false`.
+- With `OVERWRITE_EXISTING=true`, the old output file is replaced only after the
+  new file has been written successfully.
+- Data is written to a temp file in the target directory and then atomically
+  renamed.
+- Errors on individual files do not stop the batch.
+- Corrupt or unreadable files are logged as file errors.
+- Without matching rules, the file is copied unchanged.
+- No matching files: warning, exit code 0.
+- Output directories are created as needed.
 
-## 6. Logging und Exit-Codes
+## 6. Logging and Exit Codes
 
-Pro Datei wird der Name einmal geloggt; Tag-Änderungen erscheinen als Tabelle:
+Each file name is logged once; tag changes are shown as a table:
 
 ```text
   Tag         | Old Value | New Value
@@ -111,38 +112,38 @@ Pro Datei wird der Name einmal geloggt; Tag-Änderungen erscheinen als Tabelle:
   album       | Old Album | Old Title
 ```
 
-Leere Werte werden als `<leer>` dargestellt. Zusätzlich werden Zeiten für Backup,
-Kopieren, Tag-Schreiben, Ziel-Rename und Gesamt ausgegeben.
+Empty values use the current CLI marker `<leer>`. Times are also printed for
+backup, copy, tag writing, target rename, and total.
 
-| Code | Bedeutung |
+| Code | Meaning |
 | --- | --- |
-| `0` | Erfolg; im Loop-Modus auch normales Beenden per SIGINT/SIGTERM |
-| `1` | Mindestens eine Datei konnte nicht verarbeitet werden |
-| `2` | Konfigurationsfehler |
+| `0` | Success; in loop mode also normal shutdown via SIGINT/SIGTERM |
+| `1` | At least one file could not be processed |
+| `2` | Configuration error |
 
-## 7. Linux-Permissions
+## 7. Linux Permissions
 
-Der Container läuft als non-root mit UID `1000`.
+The fixer container runs as non-root with UID `1000`.
 
-- `m4b_for_AudioBookShelf` und `m4b_backup` müssen für UID 1000 schreibbar sein.
-- Werden die Verzeichnisse von Docker als `root` angelegt, kann der Container
-  nicht schreiben. Verzeichnisse vorher selbst anlegen und berechtigen:
+- `m4b_for_AudioBookShelf` and `m4b_backup` must be writable by UID 1000.
+- If Docker creates the directories as `root`, the container cannot write to
+  them. Create them and set permissions beforehand:
 
 ```bash
 mkdir -p m4b_for_AudioBookShelf m4b_backup m4b_from_AudioBookConverter config
 sudo chown -R 1000:1000 m4b_for_AudioBookShelf m4b_backup
 ```
 
-- Same-Dir und In-Place benötigen ein beschreibbares `/data/in`. Das
-  Standard-Compose mountet `/data/in` bewusst read-only; dafür muss der Mount
-  angepasst werden.
-- Der ABS-Container läuft ohne `user:`-Direktive als root. Wenn du ihn mit
-  `user: "1000:1000"` betreibst, müssen auch `/config`, `/metadata` und die
-  Library für UID 1000 schreibbar sein.
+- Same-directory and in-place modes require a writable `/data/in`. The default
+  Compose setup deliberately mounts `/data/in` read-only; the mount must be
+  changed for these modes.
+- The ABS container runs as root unless a `user:` directive is set. If you run it
+  with `user: "1000:1000"`, then `/config`, `/metadata`, and the library must also
+  be writable by UID 1000.
 
-## 8. ABS-Stack
+## 8. ABS Stack
 
-Für Fixer + Audiobookshelf als einen Stack:
+For the fixer and Audiobookshelf as one stack:
 
 ```text
 examples/abs/
@@ -166,108 +167,107 @@ New-Item -ItemType Directory -Force data/in, data/out, data/backup, abs/config, 
 docker compose up -d --build
 ```
 
-Der Fixer schreibt nach `data/out`; ABS mountet genau diesen Ordner als
-`/audiobooks`. Der Eingangsordner `data/in` wird von ABS nicht gesehen.
+The fixer writes to `data/out`; ABS mounts exactly that folder as `/audiobooks`.
+The input folder `data/in` is not visible to ABS.
 
-### ABS-Scan
+### ABS Scanning
 
-ABS erkennt neue Dateien über **Periodic Scan** oder einen manuellen Scan.
-Die ABS-Dokumentation warnt davor, externe Tools mit aktivem „Watch for file
-changes“ auf dieselbe Library loszulassen. Für diesen Stack gilt daher:
+ABS discovers new files through **periodic scans** or a manual scan. The ABS
+documentation warns against running external tools with “Watch for file changes”
+enabled on the same library. For this stack:
 
-- Library auf `/audiobooks` anlegen.
-- „Watch for file changes“ deaktivieren.
-- Periodic Scan aktivieren (z. B. alle 15 Minuten) oder manuell scannen.
+- Create the library at `/audiobooks`.
+- Disable “Watch for file changes”.
+- Enable periodic scans (for example every 15 minutes) or scan manually.
 
-Ein API-Trigger nach jedem Fixer-Lauf ist **nicht** implementiert. Das wäre ein
-separates Feature und kein Bestandteil des Datei-Workflows.
+An API trigger after each fixer pass is **not** implemented. That would be a
+separate feature and is not part of the file workflow.
 
-### Ein Ordner pro Buch
+### One Folder per Book
 
-ABS erwartet eine Bibliotheksstruktur mit einem Ordner pro Buch. Im Beispielstack
-ist deshalb `REPLICATE_SOURCE_DIR_STRUCTURE=true` gesetzt. Wenn die Eingabe schon
-pro Buch in einem Ordner liegt, wird diese Struktur unter `data/out` gespiegelt.
+ABS expects a library structure with one folder per book. The example stack
+therefore sets `REPLICATE_SOURCE_DIR_STRUCTURE=true`. If the input is already
+organized one folder per book, that structure is mirrored under `data/out`.
 
-### Nicht direkt in die ABS-Library schreiben
+### Do Not Write Directly into the ABS Library
 
-`OVERWRITE_SOURCE_FILE=true` könnte die ABS-Library direkt bearbeiten, ist hier
-aber nicht der Standard:
+`OVERWRITE_SOURCE_FILE=true` could modify the ABS library directly, but that is
+not the default here:
 
-- kein Idempotenz-Marker außer der Datei selbst
-- im Loop würde jede Datei bei jedem Durchlauf neu geschrieben
-- ABS kann während des Schreibens scannen
-- Quelle und Bibliothek wären nicht getrennt
+- no idempotency marker other than the file itself
+- in loop mode, every file would be rewritten on every pass
+- ABS could scan while the file is being written
+- source and library would not be separated
 
-Der Separate-Output-Modus mit `OVERWRITE_EXISTING=false` ist die sichere
-Standardvariante.
+Separate-output mode with `OVERWRITE_EXISTING=false` is the safe default.
 
 ## 9. Troubleshooting
 
-### ABS zeigt weiterhin falsche Tags
+### ABS Still Shows Incorrect Tags
 
-- Prüfe, ob die Library wirklich auf `/audiobooks` (= `data/out`) zeigt und nicht
-  auf den Eingangsordner.
-- Scanne die Library erneut.
-- Prüfe die Datei mit ffprobe:
+- Verify that the library points to `/audiobooks` (that is, `data/out`) and not to
+  the input folder.
+- Scan the library again.
+- Check the file with ffprobe:
   ```bash
   ffprobe -v quiet -show_entries format_tags -of json -- "book.m4b"
   ```
-- Erwartet: `show` und `episode_id` sind gesetzt.
-- Bei `.m4b` sind `mvnm`/`mvin` ohne `-export_all` unsichtbar; das ist normal.
+- Expected: `show` and `episode_id` are set.
+- For `.m4b`, `mvnm`/`mvin` are invisible without `-export_all`; that is normal.
 
-### Datei wird nicht verarbeitet
+### File Is Not Processed
 
-- `FILENAME_FILTER` prüfen (Default `*.m4b`).
-- Bei Unterverzeichnissen: `RECURSIVE=true` oder
+- Check `FILENAME_FILTER` (default `*.m4b`).
+- For subdirectories: set `RECURSIVE=true` or
   `REPLICATE_SOURCE_DIR_STRUCTURE=true`.
-- Bei bereits vorhandener Ausgabe: `OVERWRITE_EXISTING=true` oder Zieldatei
-  entfernen.
-- Bei Dateien mit `RENAME_SUFFIX`: `SKIP_SUFFIX=true` überspringt sie bewusst.
+- If output already exists: set `OVERWRITE_EXISTING=true` or remove the target
+  file.
+- Files carrying `RENAME_SUFFIX` are intentionally skipped by `SKIP_SUFFIX=true`.
 
-### Permission denied
+### Permission Denied
 
-- Ausgabe- und Backup-Verzeichnis für UID 1000 schreibbar machen.
-- Same-Dir/In-Place: `/data/in` muss beschreibbar sein; Standard-Compose ist
-  read-only.
+- Make the output and backup directories writable by UID 1000.
+- Same-directory/in-place mode: `/data/in` must be writable; the default Compose
+  setup is read-only.
 
-### ABS erkennt neue Bücher nicht
+### ABS Does Not Discover New Books
 
-- Periodic Scan aktivieren oder manuell scannen.
-- File Watcher nur nutzen, wenn du die ABS-Warnung zu externen Tools akzeptierst.
-- Prüfen, ob die Datei tatsächlich in `data/out` liegt.
+- Enable periodic scans or scan manually.
+- Use the file watcher only if you accept the ABS warning about external tools.
+- Verify that the file actually exists in `data/out`.
 
-### Keine oder falsche Seriennummer
+### Missing or Incorrect Series Sequence
 
-- `series-part` muss eine Ganzzahl sein.
-- `tvsh`/`tven` haben beim Lesen Vorrang vor `mvnm`/`mvin`.
-- Default-Mapping nur bei AudioBookConverter-Quellen verwenden.
+- `series-part` must be an integer.
+- When reading, `tvsh`/`tven` take precedence over `mvnm`/`mvin`.
+- Use the default mapping only for AudioBookConverter sources.
 
-### Docker-Compose-Fehler zu `env_file`
+### Docker Compose Error About `env_file`
 
-`env_file.required` benötigt Compose ≥ 2.24. Ältere Versionen brechen mit einem
-Schema-Fehler ab.
+`env_file.required` requires Compose ≥ 2.24. Older versions fail with a schema
+error.
 
-## 10. Sicherheit
+## 10. Security
 
-- `.env` und `override.env` nicht committen.
-- Backups enthalten vollständige Hörbücher; Zugriff entsprechend schützen.
-- ABS nicht ungeschützt ins Internet stellen; VPN oder Reverse Proxy verwenden.
-- Der Fixer benötigt keine Netzwerkverbindung und keinen ABS-API-Token.
+- Do not commit `.env` or `override.env`.
+- Backups contain complete audiobooks; protect access accordingly.
+- Do not expose ABS directly to the internet; use a VPN or reverse proxy.
+- The fixer does not require network access or an ABS API token.
 
 ## 11. GHCR
 
-`.github/workflows/docker.yml` baut und pusht
+`.github/workflows/docker.yml` builds and pushes
 `ghcr.io/yasuoiwakura/audiobook-tag-rewriter`:
 
-- Push auf `main`, `dev`, `test`
-- veröffentlichte Releases
-- manueller `workflow_dispatch`
+- pushes to `main`, `dev`, `test`
+- published releases
+- manual `workflow_dispatch`
 
-Tags: `latest` für `main`, Branch-Namen, Commit-SHA, Branch-SHA und Release-Tags.
-Optional kann `vars.DOCKER_SHORT_NAME` einen zweiten GHCR-Image-Namen aktivieren.
+Tags: `latest` for `main`, branch names, commit SHA, branch SHA, and release tags.
+Optionally, `vars.DOCKER_SHORT_NAME` enables a second GHCR image name.
 
-## 12. Weiterführend
+## 12. Further Reading
 
-- [`CONFIGURATION.md`](CONFIGURATION.md) – alle Optionen
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) – technischer Ablauf
-- [`../examples/abs/README.md`](../examples/abs/README.md) – ABS-Stack
+- [`CONFIGURATION.md`](CONFIGURATION.md) – all options
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) – technical flow
+- [`../examples/abs/README.md`](../examples/abs/README.md) – ABS stack

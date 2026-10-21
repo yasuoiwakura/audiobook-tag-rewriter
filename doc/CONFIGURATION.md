@@ -1,64 +1,64 @@
-# Konfiguration
+# Configuration
 
-## 1. Präzedenz
+## 1. Precedence
 
-Es gibt vier Ebenen. Später genannte Quellen überschreiben frühere:
+There are four layers. Later sources override earlier ones:
 
-1. eingebaute Defaults
-2. YAML-Datei (`CONFIG_FILE` oder `--config`)
-3. `.env` / Prozess-Umgebungsvariablen
-4. Kommandozeilenargumente
+1. built-in defaults
+2. YAML file (`CONFIG_FILE` or `--config`)
+3. `.env` / process environment variables
+4. command-line arguments
 
-Beim direkten Python-Aufruf wird `.env` im aktuellen Arbeitsverzeichnis geladen.
-Vorhandene Prozessvariablen haben Vorrang. Alternativ: `--env-file` oder
-`ENV_FILE`.
+When invoked directly with Python, `.env` is loaded from the current working
+directory. Existing process variables take precedence. Alternatively, use
+`--env-file` or `ENV_FILE`.
 
-## 2. Umgebungsvariablen
+## 2. Environment Variables
 
-| Variable | Default | Bedeutung |
+| Variable | Default | Meaning |
 | --- | --- | --- |
-| `INPUT_DIR` | `/in` | Eingabeverzeichnis (nicht nötig bei Einzeldatei) |
-| `OUTPUT_DIR` | `/out` | Ausgabeverzeichnis |
-| `FILENAME_FILTER` | `*.m4b` | Glob-Muster für Dateinamen |
-| `TAG_MAP` | – | JSON-Liste von Tag-Mappings |
-| `TAG_RULES` | – | JSON-Liste von Wert-Ersetzungen |
-| `RECURSIVE` | `false` | Unterverzeichnisse einbeziehen und Struktur spiegeln |
-| `REPLICATE_SOURCE_DIR_STRUCTURE` | `false` | Rekursiv suchen und Quellstruktur unter `OUTPUT_DIR` nachbilden |
-| `OUTPUT_SUFFIX` | `false` | `RENAME_SUFFIX` immer an Ausgabedateien anhängen |
-| `OVERWRITE_EXISTING` | `false` | Vorhandene Ausgabedateien überschreiben |
-| `OVERWRITE_SOURCE_FILE` | `false` | Quelle in-place überschreiben; Backup dringend empfohlen |
-| `OUTPUT_SAME_DIR` | `false` | Kopie im Quellordner ablegen statt in `OUTPUT_DIR` |
-| `RENAME_SUFFIX` | `[TAGS_REMAPPED]` | Suffix-Text für Ausgabedateien |
-| `SKIP_SUFFIX` | `true` | Dateien mit diesem Suffix nicht erneut verarbeiten |
-| `BACKUP` | `false` | Eingabedatei vor der Verarbeitung sichern |
-| `BACKUP_DIR` | – | Zielverzeichnis für Backups; bei `BACKUP=true` erforderlich |
-| `BACKUP_RETENTION_DAYS` | `30` | Backups älter als N Tage löschen; `0` deaktiviert |
+| `INPUT_DIR` | `/in` | Input directory (not required for a single file) |
+| `OUTPUT_DIR` | `/out` | Output directory |
+| `FILENAME_FILTER` | `*.m4b` | Glob pattern for file names |
+| `TAG_MAP` | – | JSON list of tag mappings |
+| `TAG_RULES` | – | JSON list of value replacements |
+| `RECURSIVE` | `false` | Include subdirectories and mirror their structure |
+| `REPLICATE_SOURCE_DIR_STRUCTURE` | `false` | Search recursively and mirror the source structure under `OUTPUT_DIR` |
+| `OUTPUT_SUFFIX` | `false` | Always append `RENAME_SUFFIX` to output files |
+| `OVERWRITE_EXISTING` | `false` | Overwrite existing output files |
+| `OVERWRITE_SOURCE_FILE` | `false` | Overwrite the source in place; backup strongly recommended |
+| `OUTPUT_SAME_DIR` | `false` | Put the copy in the source folder instead of `OUTPUT_DIR` |
+| `RENAME_SUFFIX` | `[TAGS_REMAPPED]` | Suffix text for output files |
+| `SKIP_SUFFIX` | `true` | Do not process files that already have this suffix |
+| `BACKUP` | `false` | Back up the input file before processing |
+| `BACKUP_DIR` | – | Backup target; required when `BACKUP=true` |
+| `BACKUP_RETENTION_DAYS` | `30` | Delete backups older than N days; `0` disables cleanup |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, ... |
-| `LOOP` | `false` | Dauerbetrieb (Compose: `true`) |
-| `LOOP_INTERVAL` | `60` | Sekunden zwischen Loop-Durchläufen; muss > 0 sein |
-| `SINGLE_FILE` | – | Genau diese `.m4b`-Datei verarbeiten |
-| `CONFIG_FILE` | – | Pfad zur optionalen YAML-Konfiguration |
-| `ENV_FILE` | `.env` | Pfad zur `.env`-Datei |
+| `LOOP` | `false` | Continuous operation (Compose: `true`) |
+| `LOOP_INTERVAL` | `60` | Seconds between loop passes; must be > 0 |
+| `SINGLE_FILE` | – | Process exactly this `.m4b` file |
+| `CONFIG_FILE` | – | Path to the optional YAML configuration |
+| `ENV_FILE` | `.env` | Path to the `.env` file |
 
-Boolesche Werte: `true/false`, `1/0`, `yes/no`, `on/off`, `ja/nein`.
+Boolean values: `true/false`, `1/0`, `yes/no`, `on/off`, `ja/nein`.
 
-### Env-Dateien für Compose
+### Environment Files for Compose
 
-Im Root-`compose.yml` werden drei Dateien in dieser Reihenfolge geladen:
+The root `compose.yml` loads three files in this order:
 
-1. `upstream.env` (committed Defaults)
+1. `upstream.env` (committed defaults)
 2. `override.env` (optional, ignored)
 3. `.env` (optional, ignored)
 
-Spätere Dateien überschreiben frühere Werte. Compose-Interpolation mit `${VAR}`
-liest nur `.env`; die App-Konfiguration wird über `env_file` durchgereicht.
+Later files override earlier values. Compose interpolation with `${VAR}` reads
+only `.env`; application configuration is passed through `env_file` instead.
 
 ```bash
 cp override.env.example override.env   # optional
 cp .env.example .env                   # optional
 ```
 
-Host-Pfade der Mounts sind Compose-Interpolationsvariablen und gehören in `.env`:
+Host paths for mounts are Compose interpolation variables and belong in `.env`:
 
 ```dotenv
 HOST_INPUT_DIR=./m4b_from_AudioBookConverter
@@ -67,63 +67,62 @@ HOST_BACKUP_DIR=./m4b_backup
 HOST_CONFIG_DIR=./config
 ```
 
-## 3. Dateinamenfilter
+## 3. File Name Filter
 
-- Der Filter gilt nur für den Dateinamen, nicht für Unterverzeichnisse.
-- Der Vergleich ist case-insensitiv; zusätzlich muss die Endung `.m4b` sein.
-- Standardmäßig werden nur Dateien direkt in `INPUT_DIR` verarbeitet.
-- `RECURSIVE=true` bezieht Unterverzeichnisse ein und spiegelt die Struktur unter
+- The filter applies to the file name, not to subdirectories.
+- Matching is case-insensitive; the extension must also be `.m4b`.
+- By default, only files directly in `INPUT_DIR` are processed.
+- `RECURSIVE=true` includes subdirectories and mirrors their structure under
   `OUTPUT_DIR`.
-- `REPLICATE_SOURCE_DIR_STRUCTURE=true` durchsucht `INPUT_DIR` rekursiv und bildet
-  die Unterverzeichnisse unter `OUTPUT_DIR` nach; Dateinamen bleiben unverändert.
-  `RECURSIVE` muss dafür nicht zusätzlich gesetzt werden.
-- Dateien, deren Basisname bereits mit `RENAME_SUFFIX` endet, werden bei
-  `SKIP_SUFFIX=true` nicht erneut verarbeitet.
+- `REPLICATE_SOURCE_DIR_STRUCTURE=true` searches `INPUT_DIR` recursively and
+  mirrors subdirectories under `OUTPUT_DIR`; file names remain unchanged.
+  `RECURSIVE` does not need to be set separately.
+- Files whose base name already ends with `RENAME_SUFFIX` are not processed again
+  when `SKIP_SUFFIX=true`.
 
-Beispiel:
+Example:
 
 ```text
 INPUT_DIR/German/book.m4b -> OUTPUT_DIR/German/book.m4b
 ```
 
-## 4. Suffix und Überschreiben
+## 4. Suffix and Overwrite Behavior
 
-> **Warnung:** `OVERWRITE_SOURCE_FILE=true` überschreibt die Quelldatei
-> unwiderruflich. `BACKUP=true` wird dringend empfohlen. Ohne Backup läuft die
-> Verarbeitung trotzdem, protokolliert aber pro Datei eine Warnung.
+> **Warning:** `OVERWRITE_SOURCE_FILE=true` overwrites the source file
+> irreversibly. `BACKUP=true` is strongly recommended. Without a backup,
+> processing still runs, but logs a warning for each file.
 
-- `OUTPUT_SUFFIX=false` (Default): Der Suffix wird nur als Sicherheitsnetz
-  angehängt, wenn der Zielpfad sonst identisch mit der Quelle wäre und
-  `OVERWRITE_SOURCE_FILE=false` ist.
-- `OUTPUT_SUFFIX=true`: Der Suffix wird immer angehängt (nicht doppelt, falls er
-  bereits im Namen steht).
-- `OUTPUT_SAME_DIR=true`: Der Zielpfad ist die Quelle selbst. Ohne
-  `OVERWRITE_SOURCE_FILE=true` wird deshalb automatisch der Suffix angehängt.
-- `OVERWRITE_SOURCE_FILE=true`: Die Quelle wird in-place überschrieben.
-  `BACKUP=true` ist dringend empfohlen. `OUTPUT_SUFFIX=true` hat Vorrang und
-  erzeugt stattdessen eine Kopie mit Suffix; die Quelle bleibt dann unverändert.
-- Ein leerer `RENAME_SUFFIX` ist im Same-Dir-Modus nur mit
-  `OVERWRITE_SOURCE_FILE=true` erlaubt.
-- `OUTPUT_DIR` und `INPUT_DIR` dürfen nicht identisch sein.
+- `OUTPUT_SUFFIX=false` (default): The suffix is appended only as a safety net
+  when the target path would otherwise be identical to the source and
+  `OVERWRITE_SOURCE_FILE=false`.
+- `OUTPUT_SUFFIX=true`: The suffix is always appended (not twice if it is already
+  part of the name).
+- `OUTPUT_SAME_DIR=true`: The target path is the source itself. Without
+  `OVERWRITE_SOURCE_FILE=true`, the suffix is therefore appended automatically.
+- `OVERWRITE_SOURCE_FILE=true`: The source is overwritten in place.
+  `BACKUP=true` is strongly recommended. `OUTPUT_SUFFIX=true` takes precedence
+  and creates a copy with the suffix instead; the source remains unchanged.
+- An empty `RENAME_SUFFIX` is allowed in same-directory mode only with
+  `OVERWRITE_SOURCE_FILE=true`.
+- `OUTPUT_DIR` and `INPUT_DIR` must not be identical.
 
-| Zielmodus | `OUTPUT_SUFFIX` | `OVERWRITE_SOURCE_FILE` | Ergebnis |
+| Target mode | `OUTPUT_SUFFIX` | `OVERWRITE_SOURCE_FILE` | Result |
 | --- | --- | --- | --- |
-| Replicate/Recursive | `false` | egal | `out/German/book.m4b` |
-| Replicate/Recursive | `true` | egal | `out/German/book [TAGS_REMAPPED].m4b` |
-| Same-Dir | `false` | `false` | `book [TAGS_REMAPPED].m4b` (Schutz) |
-| Same-Dir | `false` | `true` | Quelle wird in-place überschrieben |
-| Same-Dir | `true` | egal | `book [TAGS_REMAPPED].m4b` (explizit) |
-| Flach | `false` | egal | `out/book.m4b` |
-| Flach | `true` | egal | `out/book [TAGS_REMAPPED].m4b` |
+| Replicate/recursive | `false` | any | `out/German/book.m4b` |
+| Replicate/recursive | `true` | any | `out/German/book [TAGS_REMAPPED].m4b` |
+| Same-directory | `false` | `false` | `book [TAGS_REMAPPED].m4b` (safety net) |
+| Same-directory | `false` | `true` | Source is overwritten in place |
+| Same-directory | `true` | any | `book [TAGS_REMAPPED].m4b` (explicit) |
+| Flat | `false` | any | `out/book.m4b` |
+| Flat | `true` | any | `out/book [TAGS_REMAPPED].m4b` |
 
-Im Loop-Modus wird eine in-place verarbeitete Datei bei jedem Durchlauf erneut
-verarbeitet. Für einen dauerhaften Eingang ist der Separate-Output-Modus daher
-die bessere Wahl.
+In loop mode, an in-place processed file is processed again on every pass. For a
+permanent input folder, separate-output mode is therefore the better choice.
 
-## 5. TAG_MAP (Tag-zu-Tag-Mapping)
+## 5. TAG_MAP (Tag-to-Tag Mapping)
 
-`TAG_MAP` ist eine JSON-Liste. Jeder Eintrag benötigt `from` und `to`
-(alternativ `source` und `target`).
+`TAG_MAP` is a JSON list. Each entry requires `from` and `to` (alternatively
+`source` and `target`).
 
 ```json
 [
@@ -133,36 +132,34 @@ die bessere Wahl.
 ]
 ```
 
-- Wird ein Mapping angegeben, ersetzt es das Default-Mapping vollständig.
-- `TAG_MAP=[]` deaktiviert das Default-Mapping.
-- Mappings werden in Reihenfolge ausgeführt; jede Regel liest den aktuellen
-  Zwischenstand. Dadurch sind auch Ketten möglich.
-- Fehlt die Quelle, wird der Eintrag protokolliert und übersprungen.
-- Das Ziel wird bei Erfolg überschrieben; der vorherige Zielwert wird geloggt.
-- `series-part`/`mvin` erwartet eine Ganzzahl.
-- Unbekannte Tags, fehlende Pflichtfelder und ungültiges JSON führen zu
-  Exit-Code 2.
+- If a mapping is provided, it completely replaces the default mapping.
+- `TAG_MAP=[]` disables the default mapping.
+- Mappings run in order; each rule reads the current intermediate state. Chains
+  are therefore possible.
+- If the source is missing, the entry is logged and skipped.
+- On success, the target is overwritten; the previous target value is logged.
+- `series-part`/`mvin` expects an integer.
+- Unknown tags, missing required fields, and invalid JSON cause exit code 2.
 
-### Default-Mapping
+### Default Mapping
 
-Ohne `TAG_MAP` und ohne `TAG_RULES`:
+Without `TAG_MAP` and without `TAG_RULES`:
 
-| Quelle | Ziel | MP4-Atome |
+| Source | Target | MP4 atoms |
 | --- | --- | --- |
 | `album` | `series` | `tvsh` + `mvnm` |
-| `track` | `series-part` | `tven` + `mvin` (Integer) |
+| `track` | `series-part` | `tven` + `mvin` (integer) |
 | `title` | `album` | `©alb` |
 
-Mappings **kopieren** Werte; die Quelle bleibt erhalten. `title -> album`
-überschreibt also bewusst das bisherige Album, nachdem es zuvor nach `series`
-kopiert wurde.
+Mappings **copy** values; the source remains. `title -> album` therefore
+intentionally overwrites the previous album after it has been copied to `series`.
 
-Nur `TAG_RULES` gesetzt? Dann gilt **kein** Default-Mapping, weil eine explizite
-Änderungsangabe vorhanden ist. Mappings laufen immer vor den Wert-Ersetzungen.
+Only `TAG_RULES` set? Then **no** default mapping applies, because an explicit
+change instruction is present. Mappings always run before value replacements.
 
-## 6. TAG_RULES (Wert-Ersetzungen)
+## 6. TAG_RULES (Value Replacements)
 
-`TAG_RULES` ersetzt vorhandene Werte exakt. Es gibt keine Teilstring-Ersetzung.
+`TAG_RULES` replaces existing values exactly. There is no substring replacement.
 
 ```json
 [
@@ -172,40 +169,40 @@ Nur `TAG_RULES` gesetzt? Dann gilt **kein** Default-Mapping, weil eine explizite
 ]
 ```
 
-- Regeln laufen nach allen Mappings, in der angegebenen Reihenfolge.
-- Nur exakt passende Werte werden ersetzt (Groß-/Kleinschreibung inklusive).
-- Mehrwertige Felder: nur exakt passende Werte werden ersetzt, andere bleiben.
-- Fehlende Tags und nicht passende Werte sind kein Fehler, werden aber geloggt.
-- `track` wird ohne führende Nullen gelesen/verglichen; die Gesamttrackzahl bleibt.
-- Ungültiges JSON, fehlende Pflichtfelder, unbekannte Tags, identische `old`/`new`
-  und nicht-numerische Track-Werte führen zu Exit-Code 2.
-- `TAG_RULES=[]` erlaubt einen Lauf ohne Wert-Ersetzungen (und deaktiviert zusammen
-  mit fehlendem `TAG_MAP` das Default-Mapping).
+- Rules run after all mappings, in the specified order.
+- Only exact matches are replaced (case-sensitive).
+- Multi-value fields: only exactly matching values are replaced; others remain.
+- Missing tags and non-matching values are not errors, but are logged.
+- `track` is read/compared without leading zeros; the total track count remains.
+- Invalid JSON, missing required fields, unknown tags, identical `old`/`new`, and
+  non-numeric track values cause exit code 2.
+- `TAG_RULES=[]` allows a run without value replacements (and, together with a
+  missing `TAG_MAP`, disables the default mapping).
 
-## 7. Unterstützte Tags
+## 7. Supported Tags
 
-| Regelname | MP4-Atom | Hinweis |
+| Rule name | MP4 atom | Note |
 | --- | --- | --- |
 | `album` | `©alb` | Album |
-| `artist` | `©ART` | Interpret / Autor |
-| `title` | `©nam` | Titel |
-| `albumartist` | `aART` | Albuminterpret |
-| `track` | `trkn` | Tracknummer; Gesamtzahl bleibt erhalten |
-| `year` | `©day` | Jahr / Datum |
+| `artist` | `©ART` | Artist / author |
+| `title` | `©nam` | Title |
+| `albumartist` | `aART` | Album artist |
+| `track` | `trkn` | Track number; total count is preserved |
+| `year` | `©day` | Year / date |
 | `genre` | `©gen` | Genre |
-| `composer` | `©wrt` | Komponist / bei Hörbüchern oft Sprecher |
-| `comment` | `©cmt` | Kommentar |
-| `grouping` | `©grp` | Gruppierung |
-| `description` | `desc` | Beschreibung |
-| `subtitle` | `©st3` | Untertitel |
-| `publisher` | `©pub` | Verlag |
-| `series` | `tvsh` + `mvnm` | Serie; `tvsh` = ABS/ffprobe `show` |
-| `series-part` | `tven` + `mvin` | Seriennummer; `tven` = `episode_id`, `mvin` = Integer |
-| `language` | `lang` | Sprache |
+| `composer` | `©wrt` | Composer / often narrator for audiobooks |
+| `comment` | `©cmt` | Comment |
+| `grouping` | `©grp` | Grouping |
+| `description` | `desc` | Description |
+| `subtitle` | `©st3` | Subtitle |
+| `publisher` | `©pub` | Publisher |
+| `series` | `tvsh` + `mvnm` | Series; `tvsh` = ABS/ffprobe `show` |
+| `series-part` | `tven` + `mvin` | Series sequence; `tven` = `episode_id`, `mvin` = integer |
+| `language` | `lang` | Language |
 | `isbn` | `----:com.apple.iTunes:ISBN` | Freeform |
 | `asin` | `----:com.apple.iTunes:ASIN` | Freeform |
 
-Aliase:
+Aliases:
 
 - `album-artist`, `album_artist` → `albumartist`
 - `author` → `artist`
@@ -215,13 +212,13 @@ Aliase:
 - `lang` → `language`
 - `audible_asin`, `audible-asin` → `asin`
 
-`mvin` wird als echtes MP4-Integer-Atom geschrieben, `tven` als Text. Beim Lesen
-haben `tvsh`/`tven` Vorrang vor `mvnm`/`mvin`. Cover (`covr`), Kapitel (`chpl`)
-und andere vorhandene Atome bleiben beim Speichern erhalten.
+`mvin` is written as a real MP4 integer atom, `tven` as text. When reading,
+`tvsh`/`tven` take precedence over `mvnm`/`mvin`. Cover (`covr`), chapters
+(`chpl`), and other existing atoms are preserved when writing.
 
-## 8. YAML-Konfiguration
+## 8. YAML Configuration
 
-Aktivieren mit `--config` oder `CONFIG_FILE`.
+Enable with `--config` or `CONFIG_FILE`.
 
 ```yaml
 input_dir: /data/in
@@ -246,21 +243,21 @@ tag_map:
   - from: title
     to: album
 
-# optional, zusätzlich zum Mapping:
+# optional, in addition to the mapping:
 # tag_rules:
 #   - tag: album
 #     old: Old Album
 #     new: New Album
 ```
 
-Eine vollständige Vorlage liegt als `config.example.yml` bei. Für Docker:
+A complete template is included as `config.example.yml`. For Docker:
 
 ```bash
 mkdir -p config
 cp config.example.yml config/config.yml
 ```
 
-und in `.env`:
+and in `.env`:
 
 ```dotenv
 CONFIG_FILE=/config/config.yml
@@ -280,26 +277,27 @@ python -m m4b_tag_fixer --input-dir ./in --same-dir --overwrite-source-file --ba
 python -m m4b_tag_fixer --input-dir ./in --same-dir --rename-suffix "[TAGS_REMAPPED]"
 ```
 
-`PYTHONPATH=src` ist nötig, wenn das Paket nicht installiert wurde. `run.bat`
-setzt dies automatisch.
+`PYTHONPATH=src` is required if the package has not been installed. `run.bat`
+sets it automatically.
 
-## 10. Validierung
+## 10. Validation
 
-Exit-Code `2` bei Konfigurationsfehlern, unter anderem:
+Exit code `2` on configuration errors, including:
 
-- `INPUT_DIR` existiert nicht oder ist kein Verzeichnis.
+- `INPUT_DIR` does not exist or is not a directory.
 - `INPUT_DIR == OUTPUT_DIR`.
-- `OUTPUT_DIR` liegt bei rekursiver Verarbeitung innerhalb von `INPUT_DIR`.
-- `BACKUP=true` ohne `BACKUP_DIR`.
-- `BACKUP_DIR` ist identisch mit `INPUT_DIR` oder `OUTPUT_DIR`.
-- `BACKUP_DIR` liegt bei rekursiver Verarbeitung innerhalb von `INPUT_DIR`.
-- Ungültige boolesche, numerische oder JSON-Werte.
-- Unbekannte YAML-Schlüssel oder Tags.
-- `RENAME_SUFFIX` enthält ungültige Dateinamenzeichen.
-- Same-Dir mit leerem Suffix ohne `OVERWRITE_SOURCE_FILE=true`.
+- `OUTPUT_DIR` is inside `INPUT_DIR` during recursive processing.
+- `BACKUP=true` without `BACKUP_DIR`.
+- `BACKUP_DIR` is identical to `INPUT_DIR` or `OUTPUT_DIR`.
+- `BACKUP_DIR` is inside `INPUT_DIR` during recursive processing.
+- Invalid boolean, numeric, or JSON values.
+- Unknown YAML keys or tags.
+- `RENAME_SUFFIX` contains invalid file name characters.
+- Same-directory mode with an empty suffix and without
+  `OVERWRITE_SOURCE_FILE=true`.
 
-## 11. Weiterführend
+## 11. Further Reading
 
-- [`OPERATIONS.md`](OPERATIONS.md) – Docker, Backup und Troubleshooting
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) – technischer Ablauf
-- [`PROBLEM.md`](PROBLEM.md) – warum das Mapping nötig ist
+- [`OPERATIONS.md`](OPERATIONS.md) – Docker, backup, and troubleshooting
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) – technical flow
+- [`PROBLEM.md`](PROBLEM.md) – why the mapping is necessary

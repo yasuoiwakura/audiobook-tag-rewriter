@@ -1,124 +1,126 @@
-# feat-0005 – Output-Suffix und Source-Overwrite
+# feat-0005 – Output Suffix and Source Overwrite
 
-Status: umgesetzt  
-Betroffene Variante: `m4b-tag-fixer`  
+Status: implemented<br>
+Target variant: `m4b-tag-fixer`<br>
 Defaults: `OUTPUT_SUFFIX=false`, `OVERWRITE_SOURCE_FILE=false`
 
-## 1. Ziel
+## 1. Goal
 
-Suffix-Verhalten und das Überschreiben der Quelle werden von der
-Verzeichnisstruktur entkoppelt:
+Decouple suffix behavior and source overwriting from the directory structure:
 
-- `OUTPUT_SUFFIX` steuert ausschließlich, ob `RENAME_SUFFIX` an Ausgabedateien
-  angehängt wird.
-- `OVERWRITE_SOURCE_FILE` erlaubt das In-Place-Überschreiben der Quelle.
-- Ohne Overwrite-Freigabe wird der Suffix automatisch nur dann angehängt, wenn
-  der Zielpfad sonst identisch mit der Quelle wäre.
+- `OUTPUT_SUFFIX` controls only whether `RENAME_SUFFIX` is appended to output
+  files.
+- `OVERWRITE_SOURCE_FILE` allows overwriting the source in place.
+- Without overwrite permission, the suffix is appended automatically only when the
+  target path would otherwise be identical to the source.
 
-`REPLICATE_SOURCE_DIR_STRUCTURE=true` impliziert **kein** `OUTPUT_SUFFIX=true`.
+`REPLICATE_SOURCE_DIR_STRUCTURE=true` does **not** imply `OUTPUT_SUFFIX=true`.
 
-## 2. Konfiguration
+## 2. Configuration
 
-| Weg | `OUTPUT_SUFFIX` | `OVERWRITE_SOURCE_FILE` |
+| Path | `OUTPUT_SUFFIX` | `OVERWRITE_SOURCE_FILE` |
 | --- | --- | --- |
 | Environment / `.env` | `OUTPUT_SUFFIX=true` | `OVERWRITE_SOURCE_FILE=true` |
 | YAML | `output_suffix: true` | `overwrite_source_file: true` |
 | CLI | `--output-suffix` / `--no-output-suffix` | `--overwrite-source-file` / `--no-overwrite-source-file` |
 
-`RENAME_SUFFIX` bleibt der Suffix-Text (Default `[TAGS_REMAPPED]`).
+`RENAME_SUFFIX` remains the suffix text (default `[TAGS_REMAPPED]`).
 
-Präzedenz wie bisher: Defaults < YAML < `.env`/Env < CLI.
+Precedence as before: defaults < YAML < `.env`/environment < CLI.
 
-## 3. Verhalten
+## 3. Behavior
 
-### 3.1 Zielpfad
+### 3.1 Target Path
 
 ```text
-base = Zielpfad ohne Suffix
+base = target path without suffix
        same-dir   -> source
        replicate  -> OUTPUT_DIR / relative(source, INPUT_DIR)
        flat       -> OUTPUT_DIR / source.name
 
 target = base
 if OUTPUT_SUFFIX:
-    target = mit_suffix(base)                     # immer
+    target = with_suffix(base)                    # always
 elif base == source and not OVERWRITE_SOURCE_FILE:
-    target = mit_suffix(base)                     # Schutz vor Overwrite
+    target = with_suffix(base)                    # overwrite protection
 ```
 
-`mit_suffix` hängt den Suffix nicht doppelt an, wenn der Basisname bereits damit
-endet.
+`with_suffix` does not append the suffix twice if the base name already ends with
+it.
 
 ### 3.2 Matrix
 
-| Modus | `OUTPUT_SUFFIX` | `OVERWRITE_SOURCE_FILE` | Ergebnis |
+| Mode | `OUTPUT_SUFFIX` | `OVERWRITE_SOURCE_FILE` | Result |
 | --- | --- | --- | --- |
-| Same-Dir | `false` | `false` | `book [TAGS_REMAPPED].m4b` |
-| Same-Dir | `false` | `true` | Quelle wird in-place überschrieben |
-| Same-Dir | `true` | egal | `book [TAGS_REMAPPED].m4b`, Quelle unverändert |
-| Replicate/Recursive | `false` | egal | `out/sub/book.m4b` |
-| Replicate/Recursive | `true` | egal | `out/sub/book [TAGS_REMAPPED].m4b` |
-| Flach | `false` | egal | `out/book.m4b` |
-| Flach | `true` | egal | `out/book [TAGS_REMAPPED].m4b` |
+| Same-directory | `false` | `false` | `book [TAGS_REMAPPED].m4b` |
+| Same-directory | `false` | `true` | Source is overwritten in place |
+| Same-directory | `true` | any | `book [TAGS_REMAPPED].m4b`, source unchanged |
+| Replicate/recursive | `false` | any | `out/sub/book.m4b` |
+| Replicate/recursive | `true` | any | `out/sub/book [TAGS_REMAPPED].m4b` |
+| Flat | `false` | any | `out/book.m4b` |
+| Flat | `true` | any | `out/book [TAGS_REMAPPED].m4b` |
 
-### 3.3 In-Place-Overwrite
+### 3.3 In-Place Overwrite
 
-- Nur wenn `target == source` und `OVERWRITE_SOURCE_FILE=true`.
-- `OUTPUT_SUFFIX=true` hat Vorrang: Es entsteht eine Kopie mit Suffix, die Quelle
-  bleibt unverändert.
-- `BACKUP=true` wird dringend empfohlen. Ohne Backup läuft die Verarbeitung
-  trotzdem; pro Datei wird eine Warnung geloggt und es wird nichts gesichert.
-- Die Quelldatei wird vorher gesichert, gelesen und über eine Temp-Datei im
-  Quellverzeichnis atomar ersetzt.
-- Im Loop-Modus wird eine in-place verarbeitete Datei bei jedem Durchlauf erneut
-  verarbeitet.
+- Only when `target == source` and `OVERWRITE_SOURCE_FILE=true`.
+- `OUTPUT_SUFFIX=true` takes precedence: a copy with the suffix is created, and the
+  source remains unchanged.
+- `BACKUP=true` is strongly recommended. Without a backup, processing still runs;
+  a warning is logged per file and nothing is backed up.
+- The source file is backed up first, read, and atomically replaced via a temp file
+  in the source directory.
+- In loop mode, an in-place processed file is processed again on every pass.
 
-### 3.4 Validierung
+### 3.4 Validation
 
-- `OVERWRITE_SOURCE_FILE=true` ohne `BACKUP=true` ist erlaubt, wird aber beim
-  Start und pro betroffener Datei deutlich gewarnt.
-- `OUTPUT_SAME_DIR=true` mit leerem `RENAME_SUFFIX` nur zulässig, wenn
+- `OVERWRITE_SOURCE_FILE=true` without `BACKUP=true` is allowed but logs a clear
+  warning at startup and per affected file.
+- `OUTPUT_SAME_DIR=true` with an empty `RENAME_SUFFIX` is allowed only with
   `OVERWRITE_SOURCE_FILE=true`.
-- Ein leerer Suffix bei erzwungenem Overwrite-Schutz (Ziel == Quelle, kein
-  Overwrite erlaubt) führt zu einem Dateifehler.
-- `OUTPUT_DIR == INPUT_DIR` bleibt verboten.
+- An empty suffix with forced overwrite protection (target == source, overwrite not
+  allowed) causes a file error.
+- `OUTPUT_DIR == INPUT_DIR` remains forbidden.
 
 ### 3.5 Logging
 
-- Beim Start: `Suffix anwenden`, `Suffix-Text`, `Quelle überschreiben`.
-- `Rekursiv (RECURSIVE)` zeigt den tatsächlichen Variablenwert;
-  `Suche rekursiv` zeigt den effektiven Zustand inklusive Replicate.
-- In-Place-Overwrites werden pro Datei als Warnung geloggt.
+- At startup, suffix application, suffix text, and source-overwrite state are
+  logged.
+- The actual `RECURSIVE` value and the effective recursive-search state
+  (including replicate) are logged separately.
+- In-place overwrites are logged as warnings per file.
 
-## 4. Akzeptanzkriterien
+## 4. Acceptance Criteria
 
-1. `OUTPUT_SUFFIX=true` hängt den Suffix in jedem Modus an.
-2. `OUTPUT_SUFFIX=false` hängt den Suffix nur bei sonst identischem Zielpfad an.
-3. Replicate hängt ohne `OUTPUT_SUFFIX` keinen Suffix an.
-4. Same-Dir hängt ohne Overwrite-Freigabe automatisch den Suffix an.
-5. `OVERWRITE_SOURCE_FILE=true` schreibt die Quelle in-place und erstellt vorher
-   ein Backup.
-6. Ohne Backup ist der In-Place-Modus erlaubt, wird aber beim Start und pro Datei
-   deutlich gewarnt.
-7. `OUTPUT_SUFFIX=true` erzeugt auch bei erlaubtem Overwrite eine Kopie.
+1. `OUTPUT_SUFFIX=true` appends the suffix in every mode.
+2. `OUTPUT_SUFFIX=false` appends the suffix only when the target path would
+   otherwise be identical.
+3. Replicate mode does not append a suffix without `OUTPUT_SUFFIX`.
+4. Same-directory mode appends the suffix automatically without overwrite
+   permission.
+5. `OVERWRITE_SOURCE_FILE=true` overwrites the source in place and creates a
+   backup first.
+6. Without a backup, in-place mode is allowed but logs a clear warning at startup
+   and per file.
+7. `OUTPUT_SUFFIX=true` creates a copy even when overwrite is allowed.
 
 ## 5. Tests
 
-- Config: Defaults, Env/YAML/CLI-Parsing, `OVERWRITE_SOURCE_FILE` ohne Backup
-  erlaubt.
-- Config: fehlende Backup-Konfiguration erzeugt eine Warnung statt Fehler.
-- Config: Same-Dir mit leerem Suffix nur mit Overwrite-Freigabe.
-- Processor: Same-Dir in-place inklusive Backup.
-- Processor: `OUTPUT_SUFFIX` gewinnt gegen Overwrite-Freigabe.
-- Processor: In-Place ohne Backup funktioniert, ändert die Quelle und loggt eine
-  Warnung.
-- Processor: Replicate mit und ohne `OUTPUT_SUFFIX`.
-- Processor: Kollidierender flacher Zielpfad erhält automatisch den Suffix.
+- Config: defaults, env/YAML/CLI parsing, `OVERWRITE_SOURCE_FILE` without backup
+  allowed.
+- Config: missing backup configuration produces a warning instead of an error.
+- Config: same-directory mode with an empty suffix only with overwrite permission.
+- Processor: same-directory in-place including backup.
+- Processor: `OUTPUT_SUFFIX` wins over overwrite permission.
+- Processor: in-place without backup works, changes the source, and logs a
+  warning.
+- Processor: replicate mode with and without `OUTPUT_SUFFIX`.
+- Processor: a colliding flat target receives the suffix automatically.
 
-## 6. Dokumentation
+## 6. Documentation
 
-- `README.md` (Variablen, Suffix-/Overwrite-Abschnitt, Matrix, CLI)
-- `SPEC.md` (Implementierungsstand, Variablen, Suffix-Regel)
+- `README.md` (variables, suffix/overwrite section, matrix, CLI)
+- `SPEC.md` (implementation status, variables, suffix rules)
 - `.env.example`, `override.env.example`, `upstream.env`
 - `config.example.yml`
-- `doc/FEATURES/README.md` (Inventar)
+- `doc/CONFIGURATION.md` and `doc/OPERATIONS.md`
+- `doc/FEATURES/README.md` (inventory)

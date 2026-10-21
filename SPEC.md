@@ -1,298 +1,299 @@
 # SPEC – m4b-tag-fixer
 
-Stand: 2026-10-21  
-Version: 0.1.0  
-Status: lauffähiges MVP; ABS-Series-Mapping, Copy-Suffix-Modus, Input-Backup,
-Struktur-Spiegelung und In-Place-Overwrite umgesetzt
+Last updated: 2026-10-21<br>
+Version: 0.1.0<br>
+Status: working MVP; ABS series mapping, copy/suffix mode, input backup,
+directory-structure mirroring, and in-place overwrite implemented
 
-## 1. Zweck
+## 1. Purpose
 
-`m4b-tag-fixer` liest und schreibt MP4-Metadaten in `.m4b`-Hörbuchdateien. Ziel ist
-es, die von AudioBookConverter erzeugten Tags so aufzubereiten, dass
-Audiobookshelf (ABS) Titel, Autor, Sprecher, Serie und Seriennummer korrekt
-importiert.
+`m4b-tag-fixer` reads and writes MP4 metadata in `.m4b` audiobook files. The goal
+is to prepare tags produced by AudioBookConverter so that Audiobookshelf (ABS)
+correctly imports title, author, narrator, series, and series sequence.
 
-Problem, Ursachenkette und verworfene Alternativen sind in
-[`doc/PROBLEM.md`](doc/PROBLEM.md) dokumentiert.
+The problem, root-cause chain, and rejected alternatives are documented in
+[`doc/PROBLEM.md`](doc/PROBLEM.md).
 
-Im Standardmodus werden die Quelldateien nicht verändert; es wird eine Kopie
-bearbeitet. Mit `OVERWRITE_SOURCE_FILE=true` kann die Quelle explizit in-place
-überschrieben werden; ein Backup wird dringend empfohlen.
+In the default mode, source files are not modified; a copy is edited. With
+`OVERWRITE_SOURCE_FILE=true`, the source can be explicitly overwritten in place;
+a backup is strongly recommended.
 
-## 2. Aktueller Implementierungsstand
+## 2. Current Implementation
 
-### 2.1 Verarbeitung
+### 2.1 Processing
 
-- Standard-Eingabe: `/in`
-- Standard-Ausgabe: `/out`
-- Docker: `/data/in` (AudioBookConverter) → `/data/out` (AudioBookShelf)
-- Docker-Backup: `/data/backup`
-- Alternative: Kopie im Quellordner mit Suffix (`OUTPUT_SAME_DIR=true`)
-- Dateisuche: nur `.m4b`, optional rekursiv
-- Optional rekursive Suche mit Spiegelung der Quellstruktur
-  (`REPLICATE_SOURCE_DIR_STRUCTURE=true`); Dateinamen bleiben unverändert
-- Optional `OUTPUT_SUFFIX=true`, um `RENAME_SUFFIX` immer anzuhängen
-- Optional In-Place-Überschreiben der Quelle (`OVERWRITE_SOURCE_FILE=true`);
-  `BACKUP=true` dringend empfohlen
-- Dateinamenfilter: Glob, case-insensitiv, standardmäßig `*.m4b`
-- Kein Re-Encoding der Audiodaten
-- Optionales Backup der Eingabedatei vor der Verarbeitung (`BACKUP=true`)
+- Default input: `/in`
+- Default output: `/out`
+- Docker: `/data/in` (AudioBookConverter) → `/data/out` (Audiobookshelf)
+- Docker backup: `/data/backup`
+- Alternative: copy in the source folder with a suffix (`OUTPUT_SAME_DIR=true`)
+- File discovery: `.m4b` only, optionally recursive
+- Optional recursive search with source-structure mirroring
+  (`REPLICATE_SOURCE_DIR_STRUCTURE=true`); file names remain unchanged
+- Optional `OUTPUT_SUFFIX=true` to always append `RENAME_SUFFIX`
+- Optional in-place overwrite of the source (`OVERWRITE_SOURCE_FILE=true`); a
+  backup is strongly recommended
+- File name filter: glob, case-insensitive, default `*.m4b`
+- No re-encoding of audio data
+- Optional backup of the input file before processing (`BACKUP=true`)
 
-Ablauf pro Datei:
+Per-file flow:
 
-1. Tags der Quelle lesen
-2. Mappings und Wert-Ersetzungen im Speicher berechnen
-3. Optional die Quelle nach `BACKUP_DIR` sichern
-4. Quelle per `shutil.copy2` in eine Temp-Datei im Zielverzeichnis kopieren
-5. Tags in der Temp-Datei mit Mutagen ändern
-6. Temp-Datei atomar auf den Zielnamen verschieben
-7. Beim Durchlauf alte Backups gemäß `BACKUP_RETENTION_DAYS` bereinigen
-   (im Loop höchstens stündlich)
+1. Read source tags.
+2. Compute mappings and value replacements in memory.
+3. Optionally back up the source to `BACKUP_DIR`.
+4. Copy the source with `shutil.copy2` to a temp file in the target directory.
+5. Modify tags in the temp file with Mutagen.
+6. Atomically move the temp file to the target name.
+7. During a pass, clean up old backups according to `BACKUP_RETENTION_DAYS`
+   (at most hourly in loop mode).
 
-Same-Dir-Modus:
+Same-directory mode:
 
-- Zielname: `<basename> <suffix>.m4b`
-- Beispiel: `Buch [TAGS_REMAPPED].m4b`
-- Quelle bleibt unverändert, solange `OVERWRITE_SOURCE_FILE=false` ist.
-- Mit `OVERWRITE_SOURCE_FILE=true` wird die Quelle in-place überschrieben;
-  `BACKUP=true` ist dringend empfohlen, aber nicht Pflicht.
-- `OUTPUT_SUFFIX=true` hat Vorrang und erzeugt auch bei erlaubtem
-  Source-Overwrite eine Kopie mit Suffix.
-- Bereits suffixed Dateien werden bei `SKIP_SUFFIX=true` übersprungen.
-- Vorhandene Zieldateien werden bei `OVERWRITE_EXISTING=false` übersprungen.
+- Target name: `<basename> <suffix>.m4b`
+- Example: `book [TAGS_REMAPPED].m4b`
+- The source remains unchanged as long as `OVERWRITE_SOURCE_FILE=false`.
+- With `OVERWRITE_SOURCE_FILE=true`, the source is overwritten in place; a backup
+  is strongly recommended but not mandatory.
+- `OUTPUT_SUFFIX=true` takes precedence and creates a copy with the suffix even
+  when source overwrite is allowed.
+- Files that already carry the suffix are skipped when `SKIP_SUFFIX=true`.
+- Existing target files are skipped when `OVERWRITE_EXISTING=false`.
 
-Suffix-Regel:
+Suffix rules:
 
-- `OUTPUT_SUFFIX=true`: Suffix wird immer angehängt (idempotent).
-- `OUTPUT_SUFFIX=false`: Suffix nur, wenn der Zielpfad sonst identisch mit der
-  Quelle wäre und `OVERWRITE_SOURCE_FILE=false` ist.
-- Replicate/Recursive hängen ohne `OUTPUT_SUFFIX` keinen Suffix an.
-- Ein leerer `RENAME_SUFFIX` ist im Same-Dir-Modus nur mit
-  `OVERWRITE_SOURCE_FILE=true` zulässig.
+- `OUTPUT_SUFFIX=true`: the suffix is always appended (idempotent).
+- `OUTPUT_SUFFIX=false`: the suffix is appended only when the target path would
+  otherwise be identical to the source and `OVERWRITE_SOURCE_FILE=false`.
+- Replicate/recursive mode does not append a suffix unless `OUTPUT_SUFFIX` is set.
+- An empty `RENAME_SUFFIX` is allowed in same-directory mode only with
+  `OVERWRITE_SOURCE_FILE=true`.
 
-### 2.2 Konfiguration
+### 2.2 Configuration
 
-Unterstützt werden:
+Supported:
 
-- Environment Variables
-- `.env` (auch beim direkten Python-Aufruf)
+- environment variables
+- `.env` (also for direct Python invocation)
 - YAML (`CONFIG_FILE` / `--config`)
-- CLI-Argumente
-- Einzeldatei als positionsloses Argument
+- CLI arguments
+- single file as a positional argument
 
-Präzedenz: Defaults < YAML < `.env`/Env < CLI.
+Precedence: defaults < YAML < `.env`/environment < CLI.
 
-Wichtige Variablen:
+Important variables:
 
-| Variable | Default | Bedeutung |
+| Variable | Default | Meaning |
 | --- | --- | --- |
-| `INPUT_DIR` | `/in` | Eingabeverzeichnis |
-| `OUTPUT_DIR` | `/out` | Ausgabeverzeichnis |
-| `FILENAME_FILTER` | `*.m4b` | Dateinamenfilter |
-| `TAG_MAP` | – | JSON-Liste von Tag-zu-Tag-Mappings |
-| `TAG_RULES` | – | JSON-Liste von Wert-Ersetzungen |
-| `RECURSIVE` | `false` | Unterverzeichnisse einbeziehen |
-| `REPLICATE_SOURCE_DIR_STRUCTURE` | `false` | Rekursiv suchen und Quellstruktur unter `OUTPUT_DIR` nachbilden |
-| `OUTPUT_SUFFIX` | `false` | `RENAME_SUFFIX` immer an Ausgabedateien anhängen |
-| `OVERWRITE_EXISTING` | `false` | Vorhandene Ausgabe überschreiben |
-| `OVERWRITE_SOURCE_FILE` | `false` | Quelle in-place überschreiben; `BACKUP=true` dringend empfohlen |
-| `OUTPUT_SAME_DIR` | `false` | Kopie im Quellordner ablegen |
-| `RENAME_SUFFIX` | `[TAGS_REMAPPED]` | Suffix-Text für Ausgabedateien |
-| `SKIP_SUFFIX` | `true` | Bereits suffixed Dateien überspringen |
-| `BACKUP` | `false` | Eingabedatei vor der Verarbeitung sichern |
-| `BACKUP_DIR` | – | Zielverzeichnis für Backups; bei `BACKUP=true` erforderlich |
-| `BACKUP_RETENTION_DAYS` | `30` | Backups älter als N Tage löschen; `0` deaktiviert |
-| `LOG_LEVEL` | `INFO` | Log-Level |
-| `LOOP` | `false` | Dauerbetrieb (Compose: `true`) |
-| `LOOP_INTERVAL` | `60` | Sekunden zwischen Loop-Läufen |
-| `SINGLE_FILE` | – | Genau eine Datei verarbeiten |
-| `CONFIG_FILE` | – | Pfad zur YAML-Konfiguration |
-| `ENV_FILE` | `.env` | Pfad zur `.env` |
+| `INPUT_DIR` | `/in` | Input directory |
+| `OUTPUT_DIR` | `/out` | Output directory |
+| `FILENAME_FILTER` | `*.m4b` | File name filter |
+| `TAG_MAP` | – | JSON list of tag-to-tag mappings |
+| `TAG_RULES` | – | JSON list of value replacements |
+| `RECURSIVE` | `false` | Include subdirectories |
+| `REPLICATE_SOURCE_DIR_STRUCTURE` | `false` | Search recursively and mirror source structure under `OUTPUT_DIR` |
+| `OUTPUT_SUFFIX` | `false` | Always append `RENAME_SUFFIX` to output files |
+| `OVERWRITE_EXISTING` | `false` | Overwrite existing output |
+| `OVERWRITE_SOURCE_FILE` | `false` | Overwrite source in place; backup strongly recommended |
+| `OUTPUT_SAME_DIR` | `false` | Put the copy in the source folder |
+| `RENAME_SUFFIX` | `[TAGS_REMAPPED]` | Suffix text for output files |
+| `SKIP_SUFFIX` | `true` | Skip files that already carry the suffix |
+| `BACKUP` | `false` | Back up the input file before processing |
+| `BACKUP_DIR` | – | Backup target; required when `BACKUP=true` |
+| `BACKUP_RETENTION_DAYS` | `30` | Delete backups older than N days; `0` disables |
+| `LOG_LEVEL` | `INFO` | Log level |
+| `LOOP` | `false` | Continuous operation (Compose: `true`) |
+| `LOOP_INTERVAL` | `60` | Seconds between loop passes |
+| `SINGLE_FILE` | – | Process exactly one file |
+| `CONFIG_FILE` | – | Path to YAML configuration |
+| `ENV_FILE` | `.env` | Path to `.env` |
 
-### 2.3 Default-Mapping
+### 2.3 Default Mapping
 
-Ohne `TAG_MAP` und ohne `TAG_RULES`:
+Without `TAG_MAP` and without `TAG_RULES`:
 
-| Quelle | Ziel | Geschriebene MP4-Atome |
+| Source | Target | Written MP4 atoms |
 | --- | --- | --- |
 | `album` | `series` | `tvsh` + `mvnm` |
-| `track` | `series-part` | `tven` + `mvin` (Integer) |
+| `track` | `series-part` | `tven` + `mvin` (integer) |
 | `title` | `album` | `©alb` |
 
-Mappings werden vor Wert-Ersetzungen ausgeführt. Explizite `TAG_MAP`-Einträge
-ersetzen das Default-Mapping vollständig.
+Mappings run before value replacements. Explicit `TAG_MAP` entries completely
+replace the default mapping.
 
-### 2.4 Unterstützte logische Tags
+### 2.4 Supported Logical Tags
 
 `album`, `artist`, `title`, `albumartist`, `track`, `year`, `genre`, `composer`,
 `comment`, `grouping`, `description`, `subtitle`, `publisher`, `series`,
 `series-part`, `language`, `isbn`, `asin`.
 
-Aliase: `album-artist`/`album_artist`, `author`, `narrator`, `mvnm`/`show`,
+Aliases: `album-artist`/`album_artist`, `author`, `narrator`, `mvnm`/`show`,
 `mvin`/`episode_id`, `series_part`, `lang`, `audible_asin`/`audible-asin`.
 
 ### 2.5 Docker
 
-`compose.yml` (nicht `docker-compose.yml`):
+`compose.yml` (not `docker-compose.yml`):
 
-- Eine Datei mit `build: .` und
+- One file with `build: .` and
   `image: ghcr.io/yasuoiwakura/audiobook-tag-rewriter:${IMAGE_TAG:-latest}`
-- `docker compose up --build` baut lokal
-- `docker compose pull && docker compose up --no-build` nutzt das GHCR-Image
-- Compose-Service mit Loop (`LOOP=true`, `LOOP_INTERVAL=60`)
+- `docker compose up --build` builds locally
+- `docker compose pull && docker compose up --no-build` uses the GHCR image
+- Compose service with loop (`LOOP=true`, `LOOP_INTERVAL=60`)
 - `restart: on-failure`
-- `HOST_INPUT_DIR` (Default `./m4b_from_AudioBookConverter`) → `/data/in`
-  (read-only, Eingang)
-- `HOST_OUTPUT_DIR` (Default `./m4b_for_AudioBookShelf`) → `/data/out`
-  (read-write, Ausgang)
-- `HOST_BACKUP_DIR` (Default `./m4b_backup`) → `/data/backup` (read-write, Backup)
-- `HOST_CONFIG_DIR` (Default `./config`) → `/config` (read-only, optionale YAML)
-- Container läuft als non-root (UID 1000)
+- `HOST_INPUT_DIR` (default `./m4b_from_AudioBookConverter`) → `/data/in`
+  (read-only, input)
+- `HOST_OUTPUT_DIR` (default `./m4b_for_AudioBookShelf`) → `/data/out`
+  (read-write, output)
+- `HOST_BACKUP_DIR` (default `./m4b_backup`) → `/data/backup` (read-write,
+  backup)
+- `HOST_CONFIG_DIR` (default `./config`) → `/config` (read-only, optional YAML)
+- Container runs as non-root (UID 1000)
 
-Env-Reihenfolge über `env_file`:
+Environment order via `env_file`:
 
-1. `upstream.env` (committed Defaults)
+1. `upstream.env` (committed defaults)
 2. `override.env` (optional, ignored)
 3. `.env` (optional, ignored)
 
-Spätere Dateien überschreiben frühere Werte. `upstream.env` setzt `BACKUP=true`.
-`BACKUP=false` in `override.env` oder `.env` schaltet das Backup ab.
+Later files override earlier values. `upstream.env` sets `BACKUP=true`.
+`BACKUP=false` in `override.env` or `.env` disables the backup.
 
-`HOST_*`, `IMAGE_TAG` und andere Compose-Interpolationsvariablen werden nicht aus
-`env_file` gelesen. Sie kommen aus der Shell oder aus `.env`; ohne `.env` gelten
-die Defaults aus `compose.yml`. `.env` bleibt optional.
+`HOST_*`, `IMAGE_TAG`, and other Compose interpolation variables are not read from
+`env_file`. They come from the shell or `.env`; without `.env`, the defaults in
+`compose.yml` apply. `.env` remains optional.
 
-Zusätzlich gibt es einen eigenständigen Beispiel-Stack unter
-[`examples/abs/`](examples/abs/README.md). Er startet Fixer und Audiobookshelf
-gemeinsam; der Fixer schreibt nach `data/out`, das ABS als `/audiobooks` mountet.
-Der Beispiel-Stack nutzt eigene `upstream.env`/`override.env`-Dateien und setzt
-`REPLICATE_SOURCE_DIR_STRUCTURE=true`, damit die ABS-Struktur mit einem Ordner pro
-Buch erhalten bleibt.
+There is also a standalone example stack in
+[`examples/abs/`](examples/abs/README.md). It starts the fixer and Audiobookshelf
+together; the fixer writes to `data/out`, which ABS mounts as `/audiobooks`.
+The example stack uses its own `upstream.env`/`override.env` files and sets
+`REPLICATE_SOURCE_DIR_STRUCTURE=true` to preserve the ABS structure with one
+folder per book.
 
-`OUTPUT_SAME_DIR=true` benötigt ein beschreibbares Quellverzeichnis. Das
-Standard-Compose mountet `/data/in` read-only; für Same-Dir müsste der Mount
-entsprechend angepasst werden.
+`OUTPUT_SAME_DIR=true` requires a writable source directory. The default Compose
+setup mounts `/data/in` read-only; same-directory mode requires adjusting the
+mount.
 
 Logging:
 
-- Pro Datei wird der Name einmal geloggt.
-- Tag-Änderungen erscheinen als Tabelle `Tag | Old Value | New Value`; leere
-  Werte als `<leer>`.
-- Zeiten werden für Backup, Kopieren, Tags, Ziel-Rename und Gesamt ausgegeben.
-- Leere oder reine Skip-Loop-Runden werden nur auf `DEBUG` geloggt.
-- `LOG_LEVEL=INFO` ist im Leerlauf still; `WARNING`/`ERROR` reduzieren weiter.
+- Each file name is logged once.
+- Tag changes appear as a table `Tag | Old Value | New Value`; empty values use
+  the current CLI marker `<leer>`.
+- Times are printed for backup, copy, tags, target rename, and total.
+- Empty or skip-only loop passes are logged only at `DEBUG`.
+- `LOG_LEVEL=INFO` is quiet while idle; `WARNING`/`ERROR` reduce output further.
 
-### 2.6 Verifikation
+### 2.6 Verification
 
-- `pytest`: 128 Tests erfolgreich
-- `ruff check src tests`: erfolgreich
-- `docker compose config`: erfolgreich validiert
-- `docker compose -f examples/abs/compose.yml config`: erfolgreich validiert
-- Docker-Build/Container-Start: **nicht verifiziert**, weil der Docker-Daemon in
-  der Entwicklungsumgebung nicht lief
+- `pytest`: 128 tests passed
+- `ruff check src tests`: passed
+- `docker compose config`: validated successfully
+- `docker compose -f examples/abs/compose.yml config`: validated successfully
+- Docker build/container start: **not verified**, because the Docker daemon was
+  not running in the development environment
 
-## 3. Series-Mapping
+## 3. Series Mapping
 
-### 3.1 Geschriebene Atome
+### 3.1 Written Atoms
 
-| Logisch | MP4-Atome | ffprobe-Key ohne `-export_all` | ABS-Mapping |
+| Logical | MP4 atoms | ffprobe key without `-export_all` | ABS mapping |
 | --- | --- | --- | --- |
 | `series` | `tvsh`, `mvnm` | `show` | Series |
 | `series-part` | `tven`, `mvin` | `episode_id` | Series Sequence |
 
-`tven` wird als Text geschrieben, `mvin` als echtes MP4-Integer-Atom.
+`tven` is written as text; `mvin` as a real MP4 integer atom.
 
-Beim Lesen haben `tvsh`/`tven` Vorrang. Falls sie fehlen, werden `mvnm`/`mvin`
-gelesen. Damit bleiben ältere Ausgabedateien kompatibel.
+When reading, `tvsh`/`tven` take precedence. If they are missing, `mvnm`/`mvin`
+are read. This keeps older output files compatible.
 
-### 3.2 Warum zusätzlich tvsh/tven?
+### 3.2 Why Also Write tvsh/tven?
 
-- ABS ruft ffprobe ohne `-export_all` auf.
-- `mvnm`/`mvin` sind bei MP4/M4B für ffprobe unbekannte Atome und erscheinen erst
-  mit `-export_all`.
-- `tvsh`/`tven` werden von ffprobe als `show`/`episode_id` ausgegeben und von ABS
-  bereits auf Series/Series Sequence gemappt.
-- `mvnm`/`mvin` bleiben zusätzlich erhalten, damit andere Player sie finden.
+- ABS invokes ffprobe without `-export_all`.
+- For MP4/M4B, `mvnm`/`mvin` are unknown atoms to ffprobe and only appear with
+  `-export_all`.
+- `tvsh`/`tven` are returned by ffprobe as `show`/`episode_id` and are already
+  mapped by ABS to Series/Series Sequence.
+- `mvnm`/`mvin` are written additionally so other players can find them.
 
-### 3.3 Verifikation
+### 3.3 Verification
 
-Synthetische M4B-Datei nach dem Mapping:
+Synthetic M4B file after mapping:
 
 ```text
-ohne -export_all:  show = Old Album, episode_id = 3
-mit -export_all:   zusätzlich mvnm = Old Album, mvin = 3
+without -export_all:  show = Old Album, episode_id = 3
+with -export_all:     additionally mvnm = Old Album, mvin = 3
 ```
 
-Damit ist der von ABS erwartete ffprobe-Pfad über `show`/`episode_id` vorhanden; ein tatsächlicher ABS-Scan wurde in dieser Umgebung nicht ausgeführt.
+This provides the ffprobe path ABS expects via `show`/`episode_id`; an actual ABS
+scan was not executed in this environment.
 
-## 4. Bekannte Einschränkungen
+## 4. Known Limitations
 
-1. **Immer vollständige Kopie:** Auch unveränderte Dateien werden kopiert. Bei
-   einer 834-MB-Datei wurden ca. 73 Sekunden gemessen (Kopie plus
-   `mdat`-Verschiebung durch Mutagen).
-2. **MP4-Layout:** Bei `moov` vor `mdat` verschiebt jede Tag-Vergrößerung den
-   `mdat`-Block. Das ist kein Kopierproblem, sondern eine Eigenschaft des
-   MP4-Layouts und von Mutagen.
-3. **Kein Move-Modus:** Quelldateien werden weder verschoben noch gelöscht. Ein
-   In-Place-Overwrite ist über `OVERWRITE_SOURCE_FILE=true` möglich, aber im Loop
-   nicht idempotent.
-4. **Backup kostet Speicher/Zeit:** `BACKUP=true` kopiert die Eingabedatei
-   vollständig nach `BACKUP_DIR`. Alte Backups werden nach
-   `BACKUP_RETENTION_DAYS` bereinigt.
-5. **Docker-Build/Container-Start** wurden in dieser Umgebung nicht ausgeführt;
-   `docker compose config` wird validiert.
-6. **Same-Dir im Container** benötigt einen beschreibbaren `/data/in`-Mount.
+1. **Always a full copy:** Even unchanged files are copied. For an 834 MB file,
+   about 73 seconds were measured (copy plus `mdat` shift by Mutagen).
+2. **MP4 layout:** When `moov` precedes `mdat`, every tag growth shifts the `mdat`
+   block. This is not a copy problem but a property of the MP4 layout and Mutagen.
+3. **No move mode:** Source files are neither moved nor deleted. In-place
+   overwrite is possible via `OVERWRITE_SOURCE_FILE=true`, but it is not
+   idempotent in loop mode.
+4. **Backup costs storage/time:** `BACKUP=true` copies the input file in full to
+   `BACKUP_DIR`. Old backups are cleaned up according to `BACKUP_RETENTION_DAYS`.
+5. **Docker build/container start** were not executed in this environment;
+   `docker compose config` is validated.
+6. **Same-directory mode in a container** requires a writable `/data/in` mount.
 
-## 5. Optionale nächste Schritte
+## 5. Optional Next Steps
 
-Nicht implementiert, nur vorgemerkt:
+Not implemented, only noted:
 
-- `MODE=move`: In-Place-Bearbeitung plus nativer Rename, Fallback Copy+Delete
-- Reflink/CoW-Kopie, wenn das Dateisystem es unterstützt
-- Layout-Analyse/Warnung vor großem `mdat`-Shift
-- zusätzliche Metadatenfelder oder freiform-basierte Serien-Tags
+- `MODE=move`: in-place editing plus native rename, fallback copy+delete
+- Reflink/CoW copy when the file system supports it
+- Layout analysis/warning before a large `mdat` shift
+- Additional metadata fields or freeform-based series tags
 
-## 6. Abnahmekriterien
+## 6. Acceptance Criteria
 
-Erfüllt:
+Met:
 
-1. `series` wird als `tvsh` und `mvnm` geschrieben.
-2. `series-part` wird als `tven` und `mvin` geschrieben.
-3. ffprobe ohne `-export_all` zeigt `show` und `episode_id`.
-4. Same-Dir-Modus erzeugt `<basename> [TAGS_REMAPPED].m4b`.
-5. Quell-Hash bleibt vor/nach der Verarbeitung identisch.
-6. Tests und Ruff laufen erfolgreich.
-7. README, `.env.example`, `upstream.env`, `override.env.example` und
-   `config.example.yml` sind aktualisiert.
-8. `compose.yml` nutzt mehrere Env-Dateien und die drei Daten-Mounts.
-9. Der GHCR-Workflow baut und pusht das Image.
-10. `compose.yml` unterstützt lokalen Build und Prebuilt-Image ohne zusätzliche
-    Compose-Datei.
-11. Die Dokumentation ist in `README.md`, `doc/PROBLEM.md`,
-    `doc/ARCHITECTURE.md`, `doc/CONFIGURATION.md`, `doc/OPERATIONS.md` und
-    `CONTRIBUTING.md` strukturiert und gegenseitig verlinkt.
-12. `examples/abs/` bietet einen validen Compose-Stack mit Fixer und
-    Audiobookshelf; `data/out` ist die ABS-Library und `data/in` bleibt
+1. `series` is written as `tvsh` and `mvnm`.
+2. `series-part` is written as `tven` and `mvin`.
+3. ffprobe without `-export_all` shows `show` and `episode_id`.
+4. Same-directory mode creates `<basename> [TAGS_REMAPPED].m4b`.
+5. The source hash remains identical before and after processing.
+6. Tests and Ruff pass.
+7. README, `.env.example`, `upstream.env`, `override.env.example`, and
+   `config.example.yml` are up to date.
+8. `compose.yml` uses multiple env files and the three data mounts.
+9. The GHCR workflow builds and pushes the image.
+10. `compose.yml` supports local builds and the prebuilt image without an
+    additional Compose file.
+11. Documentation is structured across `README.md`, `doc/PROBLEM.md`,
+    `doc/ARCHITECTURE.md`, `doc/CONFIGURATION.md`, `doc/OPERATIONS.md`, and
+    `CONTRIBUTING.md`, with cross-links.
+12. `examples/abs/` provides a valid Compose stack with the fixer and
+    Audiobookshelf; `data/out` is the ABS library and `data/in` remains
     read-only.
+13. The frozen German README snapshot is archived at
+    [`doc/archive/README.de.md`](doc/archive/README.de.md) and linked from
+    `README.md`; it is not maintained.
 
-## 7. Referenzen
+## 7. References
 
-- AudioBookConverter Issue #759: Metadaten-Mapping für Audiobookshelf
+- AudioBookConverter Issue #759: metadata mapping for Audiobookshelf
   <https://github.com/yermak/AudioBookConverter/issues/759>
-- Audiobookshelf Issue #5669: separates Mapping für M4B
+- Audiobookshelf Issue #5669: separate mapping for M4B
   <https://github.com/advplyr/audiobookshelf/issues/5669>
 - Audiobookshelf Issue #2471: movementname/movement vs. mvnm/mvin
   <https://github.com/advplyr/audiobookshelf/issues/2471>
-- Audiobookshelf-Dokumentation „Book Library Structure“
+- Audiobookshelf documentation “Book Library Structure”
   <https://audiobookshelf.org/docs/documentation/libraries/book-library/directory-structure/>
-- ABS-Quellen:
+- ABS sources:
   - `server/libs/nodeFfprobe/index.js`
   - `server/utils/prober.js`
   - `server/scanner/AudioFileScanner.js`
-- Issue-Entwurf für das ABS-Repository: [`ABS-issue-readtags.md`](ABS-issue-readtags.md)
-  (englisch)
-- Projektproblem und Entscheidung: [`doc/PROBLEM.md`](doc/PROBLEM.md)
-- Technischer Ablauf: [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md)
-- Alle Optionen: [`doc/CONFIGURATION.md`](doc/CONFIGURATION.md)
-- Betrieb und Troubleshooting: [`doc/OPERATIONS.md`](doc/OPERATIONS.md)
-- Fixer + ABS als Stack: [`examples/abs/`](examples/abs/README.md)
+- Upstream issue draft for the ABS repository:
+  [`ABS-issue-readtags.md`](ABS-issue-readtags.md)
+- Project problem and decision: [`doc/PROBLEM.md`](doc/PROBLEM.md)
+- Technical flow: [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md)
+- All options: [`doc/CONFIGURATION.md`](doc/CONFIGURATION.md)
+- Operations and troubleshooting: [`doc/OPERATIONS.md`](doc/OPERATIONS.md)
+- Fixer + ABS as a stack: [`examples/abs/`](examples/abs/README.md)

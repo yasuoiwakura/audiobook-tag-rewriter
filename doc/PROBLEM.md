@@ -1,74 +1,72 @@
-# Problem: Falscher Audiobookshelf-Import von AudioBookConverter-M4Bs
+# Problem: Incorrect Audiobookshelf Import of AudioBookConverter M4Bs
 
-Status: dokumentiert; Workaround implementiert  
-Stand: 2026-10-21
+Status: documented; workaround implemented<br>
+Last updated: 2026-10-21
 
-## 1. Kurzfassung
+## 1. Summary
 
-AudioBookConverter schreibt Serienhörbücher mit einer anderen Tag-Semantik, als
-Audiobookshelf (ABS) bei M4B-Dateien erwartet:
+AudioBookConverter writes series audiobooks with a different tag semantics than
+Audiobookshelf (ABS) expects for M4B files:
 
-- `album` = Serie
-- `track` = Seriennummer
-- `title` = Buchtitel
+- `album` = series
+- `track` = series sequence
+- `title` = book title
 
-Audiobookshelf verwendet bei M4B dagegen `album` als Buchtitel und `track` als
-Track/Kapitel. Serie und Seriennummer wertet der ffprobe-basierte Scanner nur
-über `show` und `episode_id` aus, die aus den MP4-Atomen `tvsh` und `tven`
-stammen.
+For M4B, Audiobookshelf uses `album` as the book title and `track` as the
+track/chapter. The ffprobe-based scanner only reads the series and series sequence
+from `show` and `episode_id`, which come from the MP4 atoms `tvsh` and `tven`.
 
-Das allein wäre lösbar, indem man `mvnm`/`mvin` schreibt. ABS ruft ffprobe aber
-ohne `-export_all` auf. Dadurch sind `mvnm`/`mvin` bei MP4/M4B für ABS unsichtbar.
-Ergebnis: Der Buchtitel landet im falschen Feld, Serie und Seriennummer bleiben
-leer.
+That alone would be solvable by writing `mvnm`/`mvin`. However, ABS invokes
+ffprobe without `-export_all`. As a result, `mvnm`/`mvin` are invisible to ABS for
+MP4/M4B. The outcome: the book title lands in the wrong field, and series and
+series sequence remain empty.
 
-## 2. Symptome
+## 2. Symptoms
 
-Nach dem Import einer betroffenen `.m4b`-Datei in Audiobookshelf:
+After importing an affected `.m4b` file into Audiobookshelf:
 
-- Der Buchtitel ist leer oder entspricht dem Album-/Seriennamen.
-- Die Serie ist leer.
-- Die Seriennummer (Series Sequence) ist leer.
-- `track` wird als Kapitel/Track angezeigt, obwohl es die Seriennummer ist.
-- Die Datei muss manuell in ABS nachbearbeitet werden.
+- The book title is empty or matches the album/series name.
+- The series is empty.
+- The series sequence is empty.
+- `track` is shown as a chapter/track even though it is the series sequence.
+- The file has to be fixed manually in ABS.
 
-## 3. Ursachenkette
+## 3. Root-Cause Chain
 
-1. **AudioBookConverter-Tag-Semantik**
-   - `album = Serie`
-   - `track = Seriennummer`
-   - `title = Buchtitel`
+1. **AudioBookConverter tag semantics**
+   - `album = series`
+   - `track = series sequence`
+   - `title = book title`
 
-2. **Audiobookshelf-Mapping für M4B**
-   - `album` → Buchtitel
-   - `track` → Track/Kapitel
-   - `show` → Serie
-   - `episode_id` → Seriennummer
+2. **Audiobookshelf mapping for M4B**
+   - `album` → book title
+   - `track` → track/chapter
+   - `show` → series
+   - `episode_id` → series sequence
 
-3. **ffprobe-Verhalten bei MP4/M4B**
-   - `tvsh`/`tven` werden als `show`/`episode_id` exportiert und sind für ABS
-     sichtbar.
-   - `mvnm`/`mvin` sind für den MOV/MP4-Demuxer unbekannte Atome.
-   - Ohne `-export_all` erscheinen sie nicht in `format.tags`.
+3. **ffprobe behavior for MP4/M4B**
+   - `tvsh`/`tven` are exported as `show`/`episode_id` and are visible to ABS.
+   - `mvnm`/`mvin` are unknown atoms to the MOV/MP4 demuxer.
+   - Without `-export_all`, they do not appear in `format.tags`.
 
-4. **Folge**
-   - Die dokumentierte ABS-Zuordnung `mvnm`/`mvin` greift bei M4B nicht.
-   - Die vorhandenen Werte aus `album`/`track` werden falsch interpretiert.
+4. **Consequence**
+   - The documented ABS mapping `mvnm`/`mvin` does not work for M4B.
+   - The existing values from `album`/`track` are interpreted incorrectly.
 
-## 4. Nachweis
+## 4. Evidence
 
-Der Upstream-Issue-Entwurf [`ABS-issue-readtags.md`](../ABS-issue-readtags.md)
-enthält die vollständigen ffprobe-Beispiele. Kurzfassung:
+The upstream issue draft [`ABS-issue-readtags.md`](../ABS-issue-readtags.md)
+contains the full ffprobe examples. Short version:
 
 ```powershell
-# Ohne -export_all: mvnm/mvin fehlen
+# Without -export_all: mvnm/mvin are missing
 ffprobe.exe -v quiet -show_entries format_tags -of json -- "file.m4b"
 
-# Mit -export_all: mvnm/mvin sind sichtbar
+# With -export_all: mvnm/mvin are visible
 ffprobe.exe -v quiet -export_all 1 -show_entries format_tags -of json -- "file.m4b"
 ```
 
-Beispielausgabe mit `-export_all`:
+Example output with `-export_all`:
 
 ```json
 {
@@ -85,82 +83,83 @@ Beispielausgabe mit `-export_all`:
 }
 ```
 
-Relevante ABS-Quellen:
+Relevant ABS sources:
 
-- `server/libs/nodeFfprobe/index.js` (ffprobe-Aufruf ohne `-export_all`)
-- `server/utils/prober.js` (Mapping `series/show/mvnm`, `series-part/episode_id/mvin`)
+- `server/libs/nodeFfprobe/index.js` (ffprobe call without `-export_all`)
+- `server/utils/prober.js` (mapping `series/show/mvnm`, `series-part/episode_id/mvin`)
 - `server/scanner/AudioFileScanner.js`
 
-## 5. Entscheidung
+## 5. Decision
 
-Der Fix erfolgt **auf Dateiebene in einer Kopie**, nicht durch Patchen von ABS:
+The fix is applied **at file level in a copy**, not by patching ABS:
 
-- `album` wird nach `series` kopiert und als `tvsh` + `mvnm` geschrieben.
-- `track` wird nach `series-part` kopiert und als `tven` + `mvin` geschrieben.
-- Anschließend wird `album` auf `title` gesetzt.
+- `album` is copied to `series` and written as `tvsh` + `mvnm`.
+- `track` is copied to `series-part` and written as `tven` + `mvin`.
+- `album` is then set to `title`.
 
-Damit funktionieren beide Welten:
+This supports both worlds:
 
-- `tvsh`/`tven` sind für ABS und ffprobe ohne `-export_all` sichtbar.
-- `mvnm`/`mvin` bleiben für andere Player (Plex, Apple ecosystem usw.) erhalten.
+- `tvsh`/`tven` are visible to ABS and ffprobe without `-export_all`.
+- `mvnm`/`mvin` remain available for other players (Plex, Apple ecosystem, etc.).
 
-Die Quelldatei bleibt im Standardmodus unverändert. Das In-Place-Überschreiben
-ist eine separate, explizit zu aktivierende Option.
+The source file remains unchanged in the default mode. In-place overwriting is a
+separate option that must be enabled explicitly.
 
-## 6. Verworfene Alternativen
+## 6. Rejected Alternatives
 
-| Alternative | Warum nicht |
+| Alternative | Why not |
 | --- | --- |
-| ABS patchen oder forken | Wartungsaufwand, Upstream-Konflikt, betrifft alle Nutzer |
-| Nur auf einen Upstream-Fix warten | Blockiert den eigenen Import auf unbestimmte Zeit |
-| ABS-Metadaten nach dem Import per API setzen | Nicht dateiportabel, keine Lösung für andere Player |
-| Alle Dateien direkt in der ABS-Library überschreiben | Kein Idempotenz-Marker, unnötige Schreiblast, Scan-Rennen |
-| `mvnm`/`mvin` allein schreiben | Für ABS bei M4B unsichtbar |
+| Patch or fork ABS | Maintenance burden, upstream conflict, affects all users |
+| Wait for an upstream fix only | Blocks the import indefinitely |
+| Set ABS metadata via API after import | Not file-portable, no solution for other players |
+| Overwrite all files directly in the ABS library | No idempotency marker, unnecessary write load, scan races |
+| Write only `mvnm`/`mvin` | Invisible to ABS for M4B |
 
-## 7. Scope und Nicht-Scope
+## 7. Scope and Non-Goals
 
 **Scope:**
 
-- Batch-Verarbeitung von `.m4b`-Dateien.
-- Tag-zu-Tag-Mapping und exakte Wert-Ersetzungen.
-- Optional: Backup, Suffix, Same-Dir, rekursive Struktur, In-Place-Overwrite.
-- Docker-Betrieb als Sidecar vor einer ABS-Library.
+- Batch processing of `.m4b` files.
+- Tag-to-tag mapping and exact value replacements.
+- Optional backup, suffix, same-directory mode, recursive structure, and
+  in-place overwrite.
+- Docker operation as a sidecar in front of an ABS library.
 
-**Nicht-Scope:**
+**Non-goals:**
 
-- Re-Encoding oder Remuxing der Audiodaten.
-- Bibliotheksverwaltung, Metadaten-Matching oder Cover-Download.
-- Direkte Manipulation der ABS-Datenbank.
-- Garantierte korrekte Ergebnisse für Nicht-AudioBookConverter-Quellen.
-- Automatisches Löschen oder Verschieben der Quelldateien.
+- Re-encoding or remuxing audio data.
+- Library management, metadata matching, or cover downloads.
+- Direct manipulation of the ABS database.
+- Guaranteed correct results for non-AudioBookConverter sources.
+- Automatic deletion or moving of source files.
 
-## 8. Grenzen und Risiken
+## 8. Limits and Risks
 
-- **Vollkopie:** Jede verarbeitete Datei wird vollständig kopiert, auch wenn sich
-  keine Tags ändern. Bei großen M4Bs kostet das Zeit und Speicher.
-- **MP4-Layout:** Bei `moov` vor `mdat` kann eine Tag-Vergrößerung den
-  `mdat`-Block verschieben.
-- **Quellannahme:** Das Default-Mapping ist auf die in den Issues beschriebenen
-  AudioBookConverter-Dateien ausgelegt. Andere Quellen brauchen ein eigenes
+- **Full copy:** Every processed file is copied in full, even if no tags change.
+  For large M4Bs this costs time and storage.
+- **MP4 layout:** If `moov` precedes `mdat`, growing a tag can shift the `mdat`
+  block.
+- **Source assumption:** The default mapping is designed for the
+  AudioBookConverter files described in the issues. Other sources need their own
   `TAG_MAP`.
-- **Upstream offen:** Der ffprobe/`-export_all`-Fix liegt bei Audiobookshelf.
-  Dieses Projekt ist ein Workaround, keine Upstream-Lösung.
-- **Kein ABS-Integrationstest:** Die Tests verwenden synthetische M4B-Dateien.
-  Ein echter ABS-Scan ist kein automatisierter Bestandteil der Testsuite.
+- **Upstream still open:** The ffprobe/`-export_all` fix belongs to
+  Audiobookshelf. This project is a workaround, not an upstream solution.
+- **No ABS integration test:** The tests use synthetic M4B files. A real ABS scan
+  is not part of the automated test suite.
 
 ## 9. Upstream
 
-- [`ABS-issue-readtags.md`](../ABS-issue-readtags.md) – Entwurf für das
-  Audiobookshelf-Issue (englisch).
+- [`ABS-issue-readtags.md`](../ABS-issue-readtags.md) – draft for the
+  Audiobookshelf issue.
 - [AudioBookConverter #759](https://github.com/yermak/AudioBookConverter/issues/759)
 - [Audiobookshelf #5669](https://github.com/advplyr/audiobookshelf/issues/5669)
 - [Audiobookshelf #2471](https://github.com/advplyr/audiobookshelf/issues/2471)
 
-## 10. Referenzen
+## 10. References
 
 - [Audiobookshelf: Book Library Structure](https://audiobookshelf.org/docs/documentation/libraries/book-library/directory-structure/)
-- [Audiobookshelf: Docker-Installation](https://audiobookshelf.org/docs/documentation/install/docker/)
-- [`SPEC.md`](../SPEC.md) – Implementierungsstand und Abnahmekriterien
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) – technischer Ablauf
-- [`CONFIGURATION.md`](CONFIGURATION.md) – alle Optionen
-- [`OPERATIONS.md`](OPERATIONS.md) – Betrieb und Troubleshooting
+- [Audiobookshelf: Docker installation](https://audiobookshelf.org/docs/documentation/install/docker/)
+- [`SPEC.md`](../SPEC.md) – implementation status and acceptance criteria
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) – technical flow
+- [`CONFIGURATION.md`](CONFIGURATION.md) – all options
+- [`OPERATIONS.md`](OPERATIONS.md) – operations and troubleshooting

@@ -5,87 +5,86 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 
-`m4b-tag-fixer` ist ein Batch-CLI-Tool, das MP4-Metadaten in `.m4b`-Hörbuchdateien
-so aufbereitet, dass **Audiobookshelf (ABS)** Titel, Autor, Sprecher, Serie und
-Seriennummer korrekt importiert. Es ist als Vorverarbeitungsschritt für
-**AudioBookConverter**-Ausgaben gedacht.
+`m4b-tag-fixer` is a batch CLI tool that rewrites MP4 metadata in `.m4b`
+audiobook files so that **Audiobookshelf (ABS)** correctly imports the title,
+author, narrator, series, and series sequence. It is intended as a preprocessing
+step for **AudioBookConverter** output.
 
-Das Projekt heißt `m4b-tag-fixer`; das veröffentlichte Container-Image heißt
+The project is called `m4b-tag-fixer`; the published container image is called
 `audiobook-tag-rewriter`.
 
-- [Das Problem](#das-problem)
-- [Die Lösung](#die-lösung)
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
 - [Quick Start](#quick-start)
-- [Audiobookshelf-Stack](#audiobookshelf-stack)
-- [Architektur](#architektur)
-- [Konfiguration](#konfiguration)
-- [Betrieb](#betrieb)
-- [Grenzen und Sicherheit](#grenzen-und-sicherheit)
-- [Entwicklung](#entwicklung)
-- [Dokumentation](#dokumentation)
+- [Audiobookshelf Stack](#audiobookshelf-stack)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Operations](#operations)
+- [Limits and Safety](#limits-and-safety)
+- [Development](#development)
+- [Documentation](#documentation)
 - [Support](#support)
-- [Lizenz](#lizenz)
+- [License](#license)
 
-## Das Problem
+## The Problem
 
-AudioBookConverter schreibt Serienhörbücher typischerweise mit dieser Semantik:
+AudioBookConverter typically writes series audiobooks with this semantics:
 
-- `album` = Serie
-- `track` = Seriennummer
-- `title` = Buchtitel
+- `album` = series
+- `track` = series sequence
+- `title` = book title
 
-Audiobookshelf interpretiert bei M4B dagegen `album` als Buchtitel und `track`
-als Track/Kapitel. Serie und Seriennummer wertet der ffprobe-basierte Scanner nur
-über `show` und `episode_id` aus, die aus den MP4-Atomen `tvsh` und `tven`
-stammen.
+For M4B files, Audiobookshelf interprets `album` as the book title and `track` as
+the track/chapter. The ffprobe-based scanner only reads the series and series
+sequence from `show` and `episode_id`, which come from the MP4 atoms `tvsh` and
+`tven`.
 
-Zusätzlich ruft ABS ffprobe **ohne** `-export_all` auf. Dadurch sind die
-eigentlich passenden Atome `mvnm`/`mvin` bei MP4/M4B für ABS unsichtbar. Das
-Ergebnis: falscher Buchtitel, leere Serie, leere Seriennummer.
+In addition, ABS invokes ffprobe **without** `-export_all`. As a result, the
+actually appropriate atoms `mvnm`/`mvin` are invisible to ABS for MP4/M4B. The
+outcome: wrong book title, empty series, empty series sequence.
 
-Die vollständige Problem-, Ursachen- und Alternativenanalyse steht in
-[`doc/PROBLEM.md`](doc/PROBLEM.md). Der Upstream-Issue-Entwurf liegt in
+The full problem, root-cause, and alternatives analysis is in
+[`doc/PROBLEM.md`](doc/PROBLEM.md). The upstream issue draft is in
 [`ABS-issue-readtags.md`](ABS-issue-readtags.md).
 
-## Die Lösung
+## The Solution
 
-Der Fixer kopiert die Datei und schreibt die Tags um. Die Audiodaten werden nicht
-neu codiert.
+The fixer copies the file and rewrites the tags. The audio data is not re-encoded.
 
-Ohne `TAG_MAP` und ohne `TAG_RULES` gilt dieses Default-Mapping:
+Without `TAG_MAP` and without `TAG_RULES`, this default mapping applies:
 
-| Quelle | Ziel | MP4-Atome | Bedeutung |
+| Source | Target | MP4 atoms | Meaning |
 | --- | --- | --- | --- |
-| `album` | `series` | `tvsh`, `mvnm` | Album wird als Serie übernommen |
-| `track` | `series-part` | `tven`, `mvin` | Tracknummer wird zur Seriennummer |
-| `title` | `album` | `©alb` | Buchtitel wird als Album gesetzt |
+| `album` | `series` | `tvsh`, `mvnm` | Album is copied to series |
+| `track` | `series-part` | `tven`, `mvin` | Track number becomes series sequence |
+| `title` | `album` | `©alb` | Book title is set as album |
 
-`tvsh`/`tven` sind für ABS und ffprobe sichtbar (`show`/`episode_id`).
-`mvnm`/`mvin` werden zusätzlich geschrieben, damit andere Player sie finden.
-`mvin` bleibt ein echtes Integer-Atom.
+`tvsh`/`tven` are visible to ABS and ffprobe (`show`/`episode_id`).
+`mvnm`/`mvin` are written as well so other players can find them. `mvin` remains
+a real integer atom.
 
-Wichtig:
+Important:
 
-- Mappings **kopieren** Werte; die Quelle bleibt erhalten, das Ziel wird
-  überschrieben. `title -> album` überschreibt also bewusst das bisherige Album,
-  nachdem es zuvor nach `series` kopiert wurde.
-- Das Default-Mapping ist für AudioBookConverter-Dateien gedacht. Bei anderen
-  Quellen kann es unpassend sein.
-- Default deaktivieren: `TAG_MAP=[]` (bzw. `tag_map: []` in YAML).
-- Nur `TAG_RULES` gesetzt? Dann gilt **kein** Default-Mapping.
-- Mappings laufen immer **vor** den Wert-Ersetzungen.
+- Mappings **copy** values; the source remains, the target is overwritten.
+  `title -> album` therefore intentionally overwrites the previous album after it
+  has been copied to `series`.
+- The default mapping is intended for AudioBookConverter files. It may be
+  unsuitable for other sources.
+- Disable the default: `TAG_MAP=[]` (or `tag_map: []` in YAML).
+- Only `TAG_RULES` set? Then **no** default mapping applies.
+- Mappings always run **before** value replacements.
 
-### MP4-Metadaten, keine ID3-Frames
+### MP4 Metadata, Not ID3 Frames
 
-`.m4b`-Dateien sind MPEG-4-Container. Die Metadaten liegen in MP4-Atomen wie
-`©alb`, `©ART`, `©nam`, `aART`, `trkn`, `©day`, `©gen`, `tvsh`, `tven`, `mvnm`
-und `mvin` – nicht in klassischen ID3-Frames. Deshalb verwendet das Tool
-`mutagen.mp4.MP4`, nicht `mutagen.id3`. Details:
+`.m4b` files are MPEG-4 containers. Metadata is stored in MP4 atoms such as
+`©alb`, `©ART`, `©nam`, `aART`, `trkn`, `©day`, `©gen`, `tvsh`, `tven`, `mvnm`,
+and `mvin` — not in classic ID3 frames. That is why the tool uses
+`mutagen.mp4.MP4`, not `mutagen.id3`. Details:
 [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md).
 
 ## Quick Start
 
-Voraussetzungen: Docker mit Docker Compose **≥ 2.24**.
+Requirements: Docker with Docker Compose **≥ 2.24**.
 
 ```bash
 mkdir -p m4b_from_AudioBookConverter m4b_for_AudioBookShelf m4b_backup config
@@ -99,17 +98,17 @@ New-Item -ItemType Directory -Force m4b_from_AudioBookConverter, m4b_for_AudioBo
 docker compose up --build
 ```
 
-Dateien in `m4b_from_AudioBookConverter` legen. Der Fixer läuft im Loop
-(`LOOP=true`, `LOOP_INTERVAL=60`) und schreibt nach `m4b_for_AudioBookShelf`.
+Place files in `m4b_from_AudioBookConverter`. The fixer runs in a loop
+(`LOOP=true`, `LOOP_INTERVAL=60`) and writes to `m4b_for_AudioBookShelf`.
 
-Fertiges GHCR-Image verwenden:
+Use the published GHCR image:
 
 ```bash
 docker compose pull
 docker compose up --no-build
 ```
 
-Einmalig statt Loop:
+Run once instead of in a loop:
 
 ```bash
 LOOP=false docker compose up --build
@@ -121,25 +120,25 @@ PowerShell:
 $env:LOOP='false'; docker compose up --build
 ```
 
-Nur ein Durchlauf mit Exit-Code:
+Run a single pass with an exit code:
 
 ```bash
 docker compose run --rm -e LOOP=false m4b-tag-fixer
 ```
 
-Lokaler Python-Aufruf:
+Local Python invocation:
 
 ```bash
 pip install -r requirements.txt
 python src/main.py --input-dir ./in --output-dir ./out
 ```
 
-Alternativ `PYTHONPATH=src python -m m4b_tag_fixer ...`. Unter Windows setzt
-`run.bat` dies automatisch und nutzt standardmäßig den Same-Dir-Modus.
+Alternatively, use `PYTHONPATH=src python -m m4b_tag_fixer ...`. On Windows,
+`run.bat` sets this automatically and uses same-directory mode by default.
 
-## Audiobookshelf-Stack
+## Audiobookshelf Stack
 
-Für Fixer und ABS als **einen Stack** gibt es
+For the fixer and ABS as **one stack**, see
 [`examples/abs/`](examples/abs/README.md):
 
 ```bash
@@ -158,97 +157,95 @@ New-Item -ItemType Directory -Force data/in, data/out, data/backup, abs/config, 
 docker compose up -d --build
 ```
 
-Der Fixer schreibt nach `data/out`; ABS mountet genau diesen Ordner als
-`/audiobooks`. Der Eingangsordner `data/in` bleibt read-only und wird von ABS
-nicht gesehen.
+The fixer writes to `data/out`; ABS mounts exactly that folder as `/audiobooks`.
+The input folder `data/in` remains read-only and is not visible to ABS.
 
-- ABS-Library auf `/audiobooks` anlegen.
-- **Periodic Scan** aktivieren oder manuell scannen.
-- „Watch for file changes“ in ABS deaktivieren: Die ABS-Doku warnt bei externen
-  Tools, die Dateien in der Library verändern.
-- Im Beispiel ist `REPLICATE_SOURCE_DIR_STRUCTURE=true` gesetzt, weil ABS eine
-  Struktur mit einem Ordner pro Buch erwartet.
+- Create the ABS library at `/audiobooks`.
+- Enable **periodic scans** or scan manually.
+- Disable “Watch for file changes” in ABS: the ABS documentation warns against
+  external tools modifying files in the library.
+- The example sets `REPLICATE_SOURCE_DIR_STRUCTURE=true` because ABS expects one
+  folder per book.
 
-Der Ausgabeordner ist bewusst die ABS-Library. Ein direktes Überschreiben der
-ABS-Library über `OVERWRITE_SOURCE_FILE=true` ist möglich, aber nicht der
-Standard: Es gibt keinen Idempotenz-Marker, der Loop würde Dateien wiederholt
-schreiben, und ABS könnte währenddessen scannen.
+The output folder is intentionally the ABS library. Directly overwriting the ABS
+library via `OVERWRITE_SOURCE_FILE=true` is possible but not the default: there is
+no idempotency marker, the loop would rewrite files repeatedly, and ABS could
+scan while writing.
 
-## Architektur
+## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph STACK["Docker-Stack (examples/abs)"]
+    subgraph STACK["Docker stack (examples/abs)"]
         IN["/data/in<br/>read-only"]
-        FIX["m4b-tag-fixer<br/>Loop + Mapping"]
-        OUT["/data/out<br/>= ABS-Library"]
+        FIX["m4b-tag-fixer<br/>loop + mapping"]
+        OUT["/data/out<br/>= ABS library"]
         BAK["/data/backup"]
         ABS["Audiobookshelf<br/>:13378"]
         CFG["/config + /metadata"]
     end
 
-    ABC["AudioBookConverter<br/>oder manueller Drop"] -->|".m4b"| IN
-    IN -->|"Scan alle 60 s"| FIX
-    FIX -->|"Kopie + Tags<br/>atomarer Rename"| OUT
+    ABC["AudioBookConverter<br/>or manual drop"] -->|".m4b"| IN
+    IN -->|"scan every 60 s"| FIX
+    FIX -->|"copy + tags<br/>atomic rename"| OUT
     FIX -.->|"optional"| BAK
-    OUT -->|"Periodic Scan"| ABS
+    OUT -->|"periodic scan"| ABS
     CFG --- ABS
-    ABS -->|"Titel, Serie, Nr."| CLIENT["Web / App"]
+    ABS -->|"title, series, no."| CLIENT["web / app"]
 ```
 
-Ablauf pro Datei: Tags lesen → Mappings/Regeln im Speicher anwenden → optional
-Backup → Quelle in Temp-Datei kopieren → Tags schreiben → atomar umbenennen.
-Details und Sequenzdiagramm: [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md).
+Per-file flow: read tags → apply mappings/rules in memory → optional backup →
+copy source to a temp file → write tags → atomically rename. Details and sequence
+diagram: [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md).
 
-## Konfiguration
+## Configuration
 
-Präzedenz: Defaults < YAML < `.env`/Env < CLI.
+Precedence: defaults < YAML < `.env`/environment < CLI.
 
-| Variable | Default | Bedeutung |
+| Variable | Default | Meaning |
 | --- | --- | --- |
-| `INPUT_DIR` | `/in` | Eingabeverzeichnis |
-| `OUTPUT_DIR` | `/out` | Ausgabeverzeichnis |
-| `TAG_MAP` | – | JSON-Liste von Tag-Mappings |
-| `TAG_RULES` | – | JSON-Liste von Wert-Ersetzungen |
-| `REPLICATE_SOURCE_DIR_STRUCTURE` | `false` | Quellstruktur unter `OUTPUT_DIR` spiegeln |
-| `LOOP` | `false` | Dauerbetrieb (Compose: `true`) |
-| `BACKUP` | `false` | Eingabedatei vor der Verarbeitung sichern |
-| `OVERWRITE_SOURCE_FILE` | `false` | Quelle in-place überschreiben; Backup empfohlen |
+| `INPUT_DIR` | `/in` | Input directory |
+| `OUTPUT_DIR` | `/out` | Output directory |
+| `TAG_MAP` | – | JSON list of tag mappings |
+| `TAG_RULES` | – | JSON list of value replacements |
+| `REPLICATE_SOURCE_DIR_STRUCTURE` | `false` | Mirror source structure under `OUTPUT_DIR` |
+| `LOOP` | `false` | Continuous operation (Compose: `true`) |
+| `BACKUP` | `false` | Back up the input file before processing |
+| `OVERWRITE_SOURCE_FILE` | `false` | Overwrite the source in place; backup recommended |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, ... |
 
-Alle Optionen, YAML, CLI, `TAG_MAP`, `TAG_RULES`, unterstützte Tags und die
-Suffix-/Overwrite-Matrix: [`doc/CONFIGURATION.md`](doc/CONFIGURATION.md).
+All options, YAML, CLI, `TAG_MAP`, `TAG_RULES`, supported tags, and the
+suffix/overwrite matrix: [`doc/CONFIGURATION.md`](doc/CONFIGURATION.md).
 
-## Betrieb
+## Operations
 
-- Im Compose-Betrieb läuft der Container standardmäßig im Loop und bleibt als
-  Dienst aktiv.
-- `BACKUP=true` kopiert die Eingabedatei vollständig nach `BACKUP_DIR`; alte
-  Backups werden nach `BACKUP_RETENTION_DAYS` bereinigt.
-- Vorhandene Ausgabedateien werden bei `OVERWRITE_EXISTING=false` übersprungen.
-- Geschrieben wird zuerst in eine Temp-Datei und danach atomar umbenannt.
-- Same-Dir/In-Place benötigen ein beschreibbares `/data/in`; das Standard-Compose
-  mountet es read-only.
-- Auf Linux müssen Ausgabe und Backup für UID 1000 schreibbar sein.
-- Fehler einzelner Dateien stoppen den Batch nicht.
+- In Compose, the container runs in a loop by default and stays active as a
+  service.
+- `BACKUP=true` copies the input file in full to `BACKUP_DIR`; old backups are
+  cleaned up according to `BACKUP_RETENTION_DAYS`.
+- Existing output files are skipped when `OVERWRITE_EXISTING=false`.
+- Data is first written to a temp file and then atomically renamed.
+- Same-directory/in-place modes require a writable `/data/in`; the default Compose
+  setup mounts it read-only.
+- On Linux, the output and backup directories must be writable by UID 1000.
+- Errors on individual files do not stop the batch.
 
-Docker-Details, Mounts, Permissions, Exit-Codes, GHCR und Troubleshooting:
+Docker details, mounts, permissions, exit codes, GHCR, and troubleshooting:
 [`doc/OPERATIONS.md`](doc/OPERATIONS.md).
 
-## Grenzen und Sicherheit
+## Limits and Safety
 
-- Jede verarbeitete Datei wird vollständig kopiert, auch ohne Tag-Änderungen.
-- Kein Re-Encoding der Audiodaten.
-- Kein Move-Modus: Quelldateien werden nicht gelöscht oder verschoben.
-- In-Place-Overwrite ist möglich, aber im Loop nicht idempotent.
-- Kein automatischer ABS-Scan; ABS muss periodisch oder manuell scannen.
-- Das Default-Mapping ist auf AudioBookConverter-Ausgaben ausgelegt.
-- `.env` und `override.env` nicht committen; Backups enthalten vollständige
-  Hörbücher.
+- Every processed file is copied in full, even if no tags change.
+- No re-encoding of audio data.
+- No move mode: source files are never deleted or moved.
+- In-place overwrite is possible but not idempotent in a loop.
+- No automatic ABS scan; ABS must scan periodically or manually.
+- The default mapping is designed for AudioBookConverter output.
+- Do not commit `.env` or `override.env`; backups contain complete audiobooks.
 
-Bekannte Einschränkungen und Messwerte: [`SPEC.md`](SPEC.md).
+Known limitations and measurements: [`SPEC.md`](SPEC.md).
 
-## Entwicklung
+## Development
 
 ```bash
 python -m venv .venv
@@ -257,33 +254,34 @@ pytest
 ruff check src tests
 ```
 
-Die Tests erzeugen synthetische MP4/M4B-Dateien mit echten mutagen-Tags; es werden
-keine realen Hörbücher benötigt. Beiträge, Projektstruktur und PR-Checkliste:
+The tests create synthetic MP4/M4B files with real mutagen tags; no real
+audiobooks are required. Contributions, project structure, and the PR checklist:
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Dokumentation
+## Documentation
 
-| Dokument | Inhalt |
+| Document | Content |
 | --- | --- |
-| [`doc/PROBLEM.md`](doc/PROBLEM.md) | Problem, Ursache, Entscheidung, Alternativen |
-| [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) | Komponenten, Ablauf, Idempotenz |
-| [`doc/CONFIGURATION.md`](doc/CONFIGURATION.md) | Env, YAML, CLI, Tags, Regeln |
-| [`doc/OPERATIONS.md`](doc/OPERATIONS.md) | Docker, Backup, Troubleshooting |
-| [`SPEC.md`](SPEC.md) | Implementierungsstand und Abnahmekriterien |
-| [`doc/FEATURES/`](doc/FEATURES/README.md) | Feature-Inventar und Konventionen |
-| [`ABS-issue-readtags.md`](ABS-issue-readtags.md) | Upstream-Issue-Entwurf (englisch) |
-| [`examples/abs/`](examples/abs/README.md) | Fixer + Audiobookshelf als ein Stack |
+| [`doc/PROBLEM.md`](doc/PROBLEM.md) | Problem, root cause, decision, alternatives |
+| [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) | Components, flow, idempotency |
+| [`doc/CONFIGURATION.md`](doc/CONFIGURATION.md) | Environment, YAML, CLI, tags, rules |
+| [`doc/OPERATIONS.md`](doc/OPERATIONS.md) | Docker, backup, troubleshooting |
+| [`SPEC.md`](SPEC.md) | Implementation status and acceptance criteria |
+| [`doc/FEATURES/`](doc/FEATURES/README.md) | Feature inventory and conventions |
+| [`ABS-issue-readtags.md`](ABS-issue-readtags.md) | Upstream issue draft |
+| [`examples/abs/`](examples/abs/README.md) | Fixer + Audiobookshelf as one stack |
+| [`doc/archive/README.de.md`](doc/archive/README.de.md) | Frozen German README snapshot (unmaintained) |
 
 ## Support
 
-Fehler und Feature-Wünsche bitte über
-[GitHub Issues](https://github.com/yasuoiwakura/audiobook-tag-rewriter/issues)
-melden. Bitte keine Hörbuchdateien, Backups oder Zugangsdaten anhängen.
+Please report bugs and feature requests via
+[GitHub Issues](https://github.com/yasuoiwakura/audiobook-tag-rewriter/issues).
+Do not attach audiobook files, backups, or credentials.
 
-## Lizenz
+## License
 
-MIT – siehe [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](LICENSE).
 
-Danke an [AudioBookConverter](https://github.com/yermak/AudioBookConverter),
-[Audiobookshelf](https://github.com/advplyr/audiobookshelf) und
+Thanks to [AudioBookConverter](https://github.com/yermak/AudioBookConverter),
+[Audiobookshelf](https://github.com/advplyr/audiobookshelf), and
 [mutagen](https://mutagen.readthedocs.io/).
