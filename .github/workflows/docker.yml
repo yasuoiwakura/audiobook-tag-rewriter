@@ -1,0 +1,103 @@
+name: Docker Image
+
+on:
+  push:
+    branches: ["main", "dev", "test"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Set image tags
+        id: tags
+        shell: bash
+        run: |
+          IMAGE=$(echo "ghcr.io/${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          SHORT_NAME="${{ vars.DOCKER_SHORT_NAME }}"
+          SHA="${GITHUB_SHA::7}"
+
+          TAGS=()
+
+          add_tags() {
+            local prefix=$1
+            TAGS+=("$prefix:$2")
+            if [ -n "$3" ]; then
+              TAGS+=("$prefix:$3")
+            fi
+            if [ -n "$4" ]; then
+              TAGS+=("$prefix:$4")
+            fi
+          }
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            BRANCH=$(git for-each-ref \
+              --format='%(refname:short)' \
+              --contains "$GITHUB_SHA" \
+              refs/remotes/origin/{main,dev,test} |
+              head -n 1 |
+              sed 's#origin/##')
+
+            BRANCH_TAG=""
+            if [ -n "$BRANCH" ]; then
+              BRANCH_TAG="${BRANCH}-${SHA}"
+            fi
+
+            add_tags "$IMAGE" "$RELEASE_TAG" "$SHA" "$BRANCH_TAG"
+            if [ -n "$SHORT_NAME" ]; then
+              SHORT_IMAGE="ghcr.io/${{ github.actor }}/${SHORT_NAME}"
+              SHORT_IMAGE=$(echo "$SHORT_IMAGE" | tr '[:upper:]' '[:lower:]')
+              add_tags "$SHORT_IMAGE" "$RELEASE_TAG" "$SHA" "$BRANCH_TAG"
+            fi
+          else
+            BRANCH="${{ github.ref_name }}"
+
+            if [ "$BRANCH" = "main" ]; then
+              MOVING_TAG="latest"
+            else
+              MOVING_TAG="$BRANCH"
+            fi
+
+            add_tags "$IMAGE" "$MOVING_TAG" "$SHA" "${BRANCH}-${SHA}"
+            if [ -n "$SHORT_NAME" ]; then
+              SHORT_IMAGE="ghcr.io/${{ github.actor }}/${SHORT_NAME}"
+              SHORT_IMAGE=$(echo "$SHORT_IMAGE" | tr '[:upper:]' '[:lower:]')
+              add_tags "$SHORT_IMAGE" "$MOVING_TAG" "$SHA" "${BRANCH}-${SHA}"
+            fi
+          fi
+
+          printf '%s\n' "${TAGS[@]}" > tags.txt
+
+          echo "Tags:"
+          cat tags.txt
+
+      - name: Build
+        run: |
+          TAG_ARGS=""
+
+          while read -r TAG; do
+            TAG_ARGS="$TAG_ARGS -t $TAG"
+          done < tags.txt
+
+          docker build $TAG_ARGS .
+
+      - name: Push
+        run: |
+          while read -r TAG; do
+            docker push "$TAG"
+          done < tags.txt
