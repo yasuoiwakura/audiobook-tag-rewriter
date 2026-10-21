@@ -1,0 +1,41 @@
+# Optionale YAML-Konfiguration.
+# Aktivieren mit: CONFIG_FILE=/config/config.yml (Docker) oder --config config.yml
+
+# input_dir: /data/in
+# output_dir: /data/out
+# backup: true
+# backup_dir: /data/backup
+# backup_retention_days: 30
+# filename_filter: "*.m4b"
+# recursive: false
+# replicate_source_dir_structure: false
+# output_suffix: false
+# !!! WARNUNG: backup=true wird bei overwrite_source_file=true DRINGEND EMPFOHLEN.
+# Ohne Backup wird die Quelldatei unwiderruflich überschrieben.
+# overwrite_source_file: false
+# overwrite_existing: false
+# output_same_dir: false
+# rename_suffix: "[TAGS_REMAPPED]"
+# skip_suffix: true
+# log_level: INFO
+# loop: false
+# loop_interval: 60
+
+# Ohne tag_map und tag_rules gilt das Default-Mapping:
+# album -> series, track -> series-part, title -> album
+tag_map:
+  - from: album
+    to: series
+  - from: track
+    to: series-part
+  - from: title
+    to: album
+
+# Zusaetzliche Wert-Ersetzungen nach dem Mapping:
+# tag_rules:
+#   - tag: album
+#     old: Old Album
+#     new: New Album
+#   - tag: track
+#     old: "3"
+#     new: "7"

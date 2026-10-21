@@ -1,0 +1,39 @@
+name: m4b-tag-fixer-abs
+
+services:
+  m4b-tag-fixer:
+    build:
+      context: ../..
+    image: ghcr.io/yasuoiwakura/audiobook-tag-rewriter:${IMAGE_TAG:-latest}
+    env_file:
+      - path: upstream.env
+        required: true
+      - path: override.env
+        required: false
+    volumes:
+      # Input: AudioBookConverter output or manual drop folder (read-only).
+      - "${HOST_INPUT_DIR:-./data/in}:/data/in:ro"
+      # Output: mounted into Audiobookshelf as /audiobooks.
+      - "${HOST_OUTPUT_DIR:-./data/out}:/data/out"
+      # Optional backup of the input file.
+      - "${HOST_BACKUP_DIR:-./data/backup}:/data/backup"
+      # Optional YAML configuration for the fixer.
+      - "${HOST_CONFIG_DIR:-./config}:/config:ro"
+    restart: on-failure
+
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:${ABS_IMAGE_TAG:-latest}
+    ports:
+      - "${ABS_PORT:-13378}:80"
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      # The fixer output is the ABS library.
+      - "${HOST_OUTPUT_DIR:-./data/out}:/audiobooks"
+      # ABS configuration must stay on the same machine (SQLite database).
+      - "${HOST_ABS_CONFIG_DIR:-./abs/config}:/config"
+      - "${HOST_ABS_METADATA_DIR:-./abs/metadata}:/metadata"
+    restart: unless-stopped
+    # Optional: run ABS as a non-root user. The directories above must then be
+    # writable by this UID/GID.
+    # user: "1000:1000"
