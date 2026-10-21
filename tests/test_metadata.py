@@ -10,6 +10,7 @@ from m4b_tag_fixer.metadata import (
     MetadataError,
     apply_mapping,
     apply_rule,
+    build_tag_report,
     format_tags,
     normalize_tag,
     read_tags,
@@ -59,6 +60,24 @@ def test_exact_match_only_no_substring_replacement(sample_m4b: Path) -> None:
     exact = apply_rule(snapshot, "album", "Old Album", "New Album")
     assert exact.status == "changed"
     assert snapshot.get("album") == ["New Album"]
+
+
+def test_tag_report_lists_read_and_written_tags(sample_m4b: Path) -> None:
+    snapshot = read_tags(sample_m4b)
+    before = snapshot.clone()
+    apply_mapping(snapshot, "title", "album")
+
+    report = build_tag_report(before, snapshot, referenced={"title", "album"})
+    entries = {entry.tag: entry for entry in report}
+
+    assert entries["album"].old == ("Old Album",)
+    assert entries["album"].new == ("Old Title",)
+    assert entries["title"].old == ("Old Title",)
+    assert entries["title"].new == ("Old Title",)
+    assert entries["artist"].old == ("Old Author",)
+    assert "comment" not in entries
+    assert before.get("album") == ["Old Album"]
+    assert snapshot.get("album") == ["Old Title"]
 
 
 def test_missing_tag_is_reported(sample_m4b: Path) -> None:

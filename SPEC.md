@@ -176,15 +176,16 @@ mount.
 Logging:
 
 - Each file name is logged once.
-- Tag changes appear as a table `Tag | Old Value | New Value`; empty values use
-  the current CLI marker `<leer>`.
+- All relevant read or written tags appear in the table
+  `Tag | Old Value | New Value`, including unchanged and read-only tags; empty
+  values use the current CLI marker `<leer>`.
 - Times are printed for backup, copy, tags, target rename, and total.
 - Empty or skip-only loop passes are logged only at `DEBUG`.
 - `LOG_LEVEL=INFO` is quiet while idle; `WARNING`/`ERROR` reduce output further.
 
 ### 2.6 Verification
 
-- `pytest`: 128 tests passed
+- `pytest`: 131 tests passed
 - `ruff check src tests`: passed
 - `docker compose config`: validated successfully
 - `docker compose -f examples/abs/compose.yml config`: validated successfully

@@ -102,14 +102,17 @@ The root Compose setup sets `BACKUP=true` in `upstream.env`. `BACKUP=false` in
 
 ## 6. Logging and Exit Codes
 
-Each file name is logged once; tag changes are shown as a table:
+Each file name is logged once. The table contains every relevant tag that was
+read or written, not only changed values:
 
 ```text
-  Tag         | Old Value | New Value
-  ------------+-----------+----------
-  series      | <leer>    | Old Album
-  series-part | <leer>    | 3
-  album       | Old Album | Old Title
+  Tag         | Old Value  | New Value
+  ------------+------------+-----------
+  album       | Old Album  | Old Title
+  title       | Old Title  | Old Title
+  artist      | Old Author | Old Author
+  series      | <leer>     | Old Album
+  series-part | <leer>     | 3
 ```
 
 Empty values use the current CLI marker `<leer>`. Times are also printed for

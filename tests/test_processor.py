@@ -59,6 +59,12 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _log_row(messages: list[str], tag: str) -> str:
+    return next(
+        message for message in messages if message.strip().startswith(f"{tag} ")
+    )
+
+
 def test_filename_filter_and_extension(tmp_path: Path, make_m4b) -> None:
     config = _config(tmp_path, filename_filter="Book_*.m4b")
     input_dir = config.input_dir
@@ -758,6 +764,55 @@ def test_change_table_and_timings_are_logged(
     assert "New Album" in album_row
     assert any("Zeiten: Backup" in message for message in messages)
     assert any("Tags" in message and "Gesamt" in message for message in messages)
+
+
+def test_full_tag_report_lists_read_and_written_tags(
+    tmp_path: Path, sample_m4b: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    config = _config(tmp_path, mappings=DEFAULT_TAG_MAPPINGS)
+    caplog.set_level(logging.INFO)
+
+    BatchProcessor(config).run()
+
+    messages = [record.getMessage() for record in caplog.records]
+    header = next(message for message in messages if "Old Value" in message)
+    assert "Tag" in header
+    assert "New Value" in header
+    assert "State" not in header
+
+    album_row = _log_row(messages, "album")
+    assert "Old Album" in album_row
+    assert "Old Title" in album_row
+
+    series_row = _log_row(messages, "series")
+    assert "<leer>" in series_row
+    assert "Old Album" in series_row
+
+    artist_row = _log_row(messages, "artist")
+    assert artist_row.count("Old Author") == 2
+
+    title_row = _log_row(messages, "title")
+    assert title_row.count("Old Title") == 2
+
+    assert "Keine Tag-Änderungen." not in caplog.text
+
+
+def test_tag_report_is_logged_without_changes(
+    tmp_path: Path, sample_m4b: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    config = _config(
+        tmp_path,
+        (TagRule("album", "Different Album", "New Album"),),
+    )
+    caplog.set_level(logging.INFO)
+
+    summary = BatchProcessor(config).run()
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert summary.changes == 0
+    album_row = _log_row(messages, "album")
+    assert album_row.count("Old Album") == 2
+    assert "Keine Tag-Änderungen." not in caplog.text
 
 
 def test_empty_loop_is_debug_not_warning(

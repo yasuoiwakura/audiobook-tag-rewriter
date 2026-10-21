@@ -13,9 +13,11 @@ from typing import Literal
 from .config import Config
 from .metadata import (
     MetadataError,
+    TagReportEntry,
     TagSnapshot,
     apply_mapping,
     apply_rule,
+    build_tag_report,
     format_tags,
     read_tags,
     write_changes,
@@ -221,6 +223,7 @@ class BatchProcessor:
             return FileOutcome(status="failed", message=str(exc))
 
         self.logger.debug("%s: Tags: %s", source.name, format_tags(snapshot))
+        before = snapshot.clone()
 
         changes: list[TagChange] = []
         changed_fields: set[str] = set()
@@ -313,10 +316,12 @@ class BatchProcessor:
 
         total_seconds = time.perf_counter() - total_start
 
-        if changes:
-            self._log_changes(changes)
-        else:
-            self.logger.info("  Keine Tag-Änderungen.")
+        referenced = {mapping.source for mapping in self.config.tag_mappings}
+        referenced.update(mapping.target for mapping in self.config.tag_mappings)
+        referenced.update(rule.tag for rule in self.config.tag_rules)
+        self._log_tag_report(
+            build_tag_report(before, snapshot, referenced=referenced)
+        )
 
         self.logger.info(
             "  Zeiten: Backup %.2fs | Kopieren %.2fs | Tags %.2fs | Ziel-Rename %.2fs | Gesamt %.2fs",
@@ -334,12 +339,23 @@ class BatchProcessor:
             backed_up=backed_up,
         )
 
-    def _log_changes(self, changes: list[TagChange]) -> None:
-        rows = [("Tag", "Old Value", "New Value")]
-        rows.extend((change.tag, change.old, change.new) for change in changes)
-        widths = [max(len(row[index]) for row in rows) for index in range(3)]
+    def _log_tag_report(self, entries: list[TagReportEntry]) -> None:
+        if not entries:
+            self.logger.info("  Keine Tags gelesen oder geschrieben.")
+            return
+        rows = [
+            (entry.tag, _display_values(entry.old), _display_values(entry.new))
+            for entry in entries
+        ]
+        self._log_table(("Tag", "Old Value", "New Value"), rows)
 
-        for index, row in enumerate(rows):
+    def _log_table(
+        self, headers: tuple[str, ...], rows: list[tuple[str, ...]]
+    ) -> None:
+        table = [headers, *rows]
+        widths = [max(len(row[index]) for row in table) for index in range(len(headers))]
+
+        for index, row in enumerate(table):
             if index == 1:
                 self.logger.info(
                     "  %s",

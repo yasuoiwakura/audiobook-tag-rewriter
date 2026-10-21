@@ -124,6 +124,19 @@ class TagSnapshot:
     def get(self, tag: str) -> list[str]:
         return self.values.get(tag, [])
 
+    def clone(self) -> TagSnapshot:
+        return TagSnapshot(
+            values={name: list(values) for name, values in self.values.items()},
+            track_total=self.track_total,
+        )
+
+
+@dataclass(frozen=True)
+class TagReportEntry:
+    tag: str
+    old: tuple[str, ...]
+    new: tuple[str, ...]
+
 
 @dataclass(frozen=True)
 class RuleResult:
@@ -237,6 +250,28 @@ def apply_rule(snapshot: TagSnapshot, tag: str, old: str, new: str) -> RuleResul
         current[index] = new
     snapshot.values[tag] = current
     return RuleResult(status="changed", replaced=len(matches), current=tuple(current))
+
+
+def build_tag_report(
+    before: TagSnapshot,
+    after: TagSnapshot,
+    referenced: Iterable[str] = (),
+) -> list[TagReportEntry]:
+    tags = {normalize_tag(name) for name in referenced}
+    for name in SUPPORTED_TAGS:
+        if before.get(name) or after.get(name):
+            tags.add(name)
+
+    ordered = [name for name in DISPLAY_FIELDS if name in tags]
+    ordered.extend(sorted(tags.difference(ordered)))
+    return [
+        TagReportEntry(
+            tag=name,
+            old=tuple(before.get(name)),
+            new=tuple(after.get(name)),
+        )
+        for name in ordered
+    ]
 
 
 def format_tags(snapshot: TagSnapshot) -> str:

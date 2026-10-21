@@ -21,4 +21,4 @@ own document in this directory.
 | --- | --- | --- | --- | --- |
 | [feat-0004](feat-0004-replicate-source-dir-structure.md) | `matt-0004` | implemented | `REPLICATE_SOURCE_DIR_STRUCTURE` (env, YAML, CLI) | Find files recursively and place them in the matching subdirectory under the output directory; default `false` |
 | [feat-0005](feat-0005-output-suffix-and-overwrite-source.md) | `matt-0005` | implemented | `OUTPUT_SUFFIX`, `OVERWRITE_SOURCE_FILE` (env, YAML, CLI) | Apply the suffix explicitly or only as overwrite protection; optionally overwrite the source in place (`BACKUP=true` strongly recommended); defaults `false` |
-| [feat-0006](feat-0006-complete-tag-report.md) | `matt-0006` | planned | `TAG_REPORT` (env, YAML, CLI) | Log every tag that is read or written, not only changed mappings; `all` (new default) vs. `changes` (previous behavior) |
+| [feat-0006](feat-0006-complete-tag-report.md) | `matt-0006` | implemented | – | Extend the existing change table to every relevant tag that is read or written; no new configuration |

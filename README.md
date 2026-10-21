@@ -224,6 +224,8 @@ suffix/overwrite matrix: [`doc/CONFIGURATION.md`](doc/CONFIGURATION.md).
 - `BACKUP=true` copies the input file in full to `BACKUP_DIR`; old backups are
   cleaned up according to `BACKUP_RETENTION_DAYS`.
 - Existing output files are skipped when `OVERWRITE_EXISTING=false`.
+- The per-file tag table lists all relevant tags that were read or written, not
+  only changes.
 - Data is first written to a temp file and then atomically renamed.
 - Same-directory/in-place modes require a writable `/data/in`; the default Compose
   setup mounts it read-only.
