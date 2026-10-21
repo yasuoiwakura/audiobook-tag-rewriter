@@ -1,0 +1,24 @@
+# For an all-in-one stack with Audiobookshelf see examples/abs/.
+services:
+  m4b-tag-fixer:
+    build:
+      context: .
+    image: ghcr.io/yasuoiwakura/audiobook-tag-rewriter:${IMAGE_TAG:-latest}
+    env_file:
+      - path: upstream.env
+        required: true
+      - path: override.env
+        required: false
+      - path: .env
+        required: false
+    volumes:
+      # Host paths can be overridden in .env (optional).
+      # Input: AudioBookConverter output (read-only; the app never writes here)
+      - "${HOST_INPUT_DIR:-./m4b_from_AudioBookConverter}:/data/in:ro"
+      # Output: library folder for AudioBookShelf (read-write)
+      - "${HOST_OUTPUT_DIR:-./m4b_for_AudioBookShelf}:/data/out"
+      # Backup of the input file (read-write)
+      - "${HOST_BACKUP_DIR:-./m4b_backup}:/data/backup"
+      # Optional YAML configuration (read-only)
+      - "${HOST_CONFIG_DIR:-./config}:/config:ro"
+    restart: on-failure

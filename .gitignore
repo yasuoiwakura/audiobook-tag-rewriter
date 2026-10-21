@@ -218,3 +218,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# m4b-tag-fixer
+.env
+override.env
+data/input/
+data/output/
+in/
+out/
+m4b_for_AudioBookShelf/
+m4b_backup/
+m4b_from_AudioBookConverter/
+config/config.yml
+examples/abs/data/
+examples/abs/abs/
+examples/abs/config/config.yml
+*.tmp
+
